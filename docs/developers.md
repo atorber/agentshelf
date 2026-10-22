@@ -1,5 +1,7 @@
 # 开发者
 
-官网说明如何使用 AgentShelf。阅读源码、本地构建、命令行和接口，请直接查看 GitHub 项目：
+这里说明怎么使用 AgentShelf。阅读源码、本地构建和接口，请直接看 GitHub 项目：
 
-[https://github.com/atorber/agentshelf](https://github.com/atorber/agentshelf)
+[atorber/agentshelf](https://github.com/atorber/agentshelf)
+
+窗口里的产物库、上传、整理和设置就是产品本身。对使用者，安装和归档只提供提示词，不要求打开终端。

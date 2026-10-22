@@ -11,14 +11,16 @@ theme:
   language: zh
   logo: assets/logo.svg
   favicon: assets/favicon.svg
+  font: false
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.footer
     - navigation.instant
     - navigation.instant.prefetch
     - navigation.tracking
     - navigation.path
     - navigation.top
-    - navigation.expand
     - search.suggest
     - search.highlight
     - content.code.copy
@@ -51,19 +53,23 @@ plugins:
 markdown_extensions:
   - admonition
   - attr_list
+  - md_in_html
   - tables
   - toc:
-      permalink: true
+      permalink: false
   - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.superfences
 
 nav:
   - 首页: index.md
-  - 产品说明: product.md
+  - 产品: product.md
   - 快速开始: quickstart.md
-  - 使用说明: usage.md
-  - 在 Agent 中使用: agent.md
+  - 使用: usage.md
+  - 在 Agent 中: agent.md
   - 排查: troubleshooting.md
   - 开发者: developers.md

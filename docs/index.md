@@ -1,37 +1,86 @@
 # AgentShelf
 
-AgentShelf 是面向多个 AI Agent 的本地最终产物库。Claude Code、Cursor、Codex，以及其他支持 Skill 的 Agent，完成任务后把最终成果交到这台电脑上。你可以在一个窗口里检索、预览、保留版本，并在需要时恢复和备份。
+<p class="ash-lead">面向多个 AI Agent 的本地最终产物库。任务结束后，把值得留下的最终稿收进这台电脑，在一个窗口里检索、预览和保留版本。</p>
+<p class="ash-meta">当前版本 0.2.2 · macOS 与 Windows · 文件、检索词和使用记录都留在本机</p>
 
-文件、检索词和使用记录都留在本机。当前版本是 0.2.2，支持 macOS 与 Windows。
+<div class="ash-actions" markdown>
 
-## 文档
+[安装并归档第一份](quickstart.md){ .md-button .md-button--primary }
+[看产品说明](product.md){ .md-button }
 
-| 文档 | 内容 |
+</div>
+
+## 三步用起来
+
+<div class="grid cards" markdown>
+
+-   :material-download:{ .lg .middle } __安装一次__
+
+    ---
+
+    把一段提示词发给正在使用的 Agent。它安装 Skill 并打开窗口。每个 Agent 只做一次。
+
+    [提示词 :material-arrow-right:](quickstart.md#install)
+
+-   :material-archive-arrow-down:{ .lg .middle } __一句话归档__
+
+    ---
+
+    任务完成时说「把这份最终稿归档到 AgentShelf。」名称、项目、标签和来源由 Agent 填写。
+
+    [归档 :material-arrow-right:](agent.md#archive)
+
+-   :material-eye-outline:{ .lg .middle } __在窗口里确认__
+
+    ---
+
+    一个文件直接预览。多个文件先列出，再点开查看。版本、来源和备份都在同一处。
+
+    [窗口说明 :material-arrow-right:](usage.md)
+
+</div>
+
+## 留下什么
+
+AgentShelf 保管各 Agent 值得留下的最终成果：文档、代码、图片、报告和数据文件，以及后来的修改。每份产物记下编号、来源 Agent、所属项目和归档时间。
+
+思考过程、工具调用记录和临时中间稿留在 Agent 自己的会话里，不会进库。
+
+<div class="grid cards" markdown>
+
+-   :material-folder-multiple-outline:{ .lg .middle } __统一归档__
+
+    ---
+
+    Claude Code、Cursor、Codex，以及其他支持 Skill 的 Agent，把最终稿交到同一个本机库。你也可以自己拖进窗口。原项目里的文件仍留在原处。
+
+-   :material-text-search:{ .lg .middle } __统一检索__
+
+    ---
+
+    按标题、正文和文件名查找，再用项目、标签、来源和格式筛选。筛选写在地址里，从详情返回后还在。
+
+-   :material-source-branch:{ .lg .middle } __版本可追溯__
+
+    ---
+
+    每份产物有稳定编号。后续更新生成新版本，旧内容仍可预览，也可以恢复成新的当前版本。文件名不会用来覆盖已有记录。
+
+</div>
+
+相同内容只保存一份文件。再次遇到时，由你选择新建一份产物，或追加到已有产物。规则见 [产品说明](product.md)。
+
+## 窗口
+
+窗口有四个页面。左侧显示服务是否在响应，以及当前产物数量。
+
+| 页面 | 用来 |
 |---|---|
-| [产品说明](product.md) | 它保管什么、如何区分版本、能看哪些格式 |
-| [快速开始](quickstart.md) | 安装、归档第一份文件，并在窗口里确认 |
-| [使用说明](usage.md) | 产物库、上传、详情、整理和设置 |
-| [在 Agent 中使用](agent.md) | 用提示词安装、归档和查找 |
-| [排查](troubleshooting.md) | 打不开、预览失败、搜不到和备份 |
-
-## 它解决的问题
-
-一次任务结束后，最终稿常常散落在各个 Agent 的对话和项目文件夹里。换一个 Agent 继续改同一份成果时，很难回答三件事：文件在哪、哪一版是现在用的、它从哪个 Agent 来。
-
-AgentShelf 把值得留下的最终成果收进同一个本机库：
-
-- **统一归档。** 各 Agent 安装同一个 Skill。你也可以在窗口里自己放入文件。原项目里的文件仍留在原处。
-- **统一检索。** 按标题、正文、文件名查找，再用项目、标签、来源和格式筛选。
-- **版本可追溯。** 每份产物有稳定编号。后续更新生成新版本，旧内容仍可预览，并可以恢复成新的当前版本。
-
-## 怎么用
-
-日常使用不需要打开终端。在你正在用的 Agent 里发一段提示词，由它安装并归档。归档时说「把这份最终稿归档到 AgentShelf。」即可，名称、项目、标签和来源由 Agent 填写。窗口用来浏览、预览和整理。
-
-两种方式走同一套规则：内容相同只保存一份文件；再次遇到相同内容时，需要你选择新建一份产物，或追加到已有产物。文件名不会用来覆盖已有记录。
-
-提示词和安装说明见 [快速开始](quickstart.md) 与 [在 Agent 中使用](agent.md)。
+| [产物库](usage.md#library) | 浏览、搜索和筛选。一行一条，点进去看详情 |
+| [上传](usage.md#upload) | 不经过 Agent，自己把文件放进库 |
+| [整理](usage.md#organize) | 维护项目、标签和来源。删除它们不会删除产物 |
+| [设置](usage.md#settings) | 复制提示词、查看数据目录、备份，以及按需启用语义检索 |
 
 ## 给开发者
 
-改程序、本地构建和接口说明在 GitHub 项目中：[atorber/agentshelf](https://github.com/atorber/agentshelf)。
+改程序、本地构建和接口在 GitHub 项目里：[atorber/agentshelf](https://github.com/atorber/agentshelf)。
