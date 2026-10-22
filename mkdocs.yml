@@ -1,0 +1,69 @@
+site_name: AgentShelf
+site_description: 面向多个 AI Agent 的本地最终产物库
+site_url: https://atorber.github.io/agentshelf/
+repo_url: https://github.com/atorber/agentshelf
+repo_name: atorber/agentshelf
+edit_uri: edit/main/docs/
+docs_dir: docs
+
+theme:
+  name: material
+  language: zh
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  features:
+    - navigation.footer
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.tracking
+    - navigation.path
+    - navigation.top
+    - navigation.expand
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: 深色模式
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: 浅色模式
+
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  - search:
+      lang:
+        - zh
+        - en
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+
+nav:
+  - 首页: index.md
+  - 产品说明: product.md
+  - 快速开始: quickstart.md
+  - 使用说明: usage.md
+  - 命令行与 Skill: cli-and-skill.md
+  - 数据与接口: reference.md
+  - 排查: troubleshooting.md

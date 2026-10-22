@@ -1,0 +1,32 @@
+:root {
+  --md-text-font: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --md-code-font: "SFMono-Regular", "SF Mono", "JetBrains Mono", "Cascadia Code", ui-monospace, monospace;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #3c342c;
+  --md-primary-fg-color--light: #6b5e52;
+  --md-primary-fg-color--dark: #241e1a;
+  --md-primary-bg-color: #f6f1e8;
+  --md-accent-fg-color: #8d5a3c;
+  --md-typeset-a-color: #8d5a3c;
+  --md-default-bg-color: #f7f4ef;
+  --md-default-fg-color: #2c2824;
+  --md-footer-bg-color: #2c2824;
+  --md-footer-fg-color: #f6f1e8;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #c4a484;
+  --md-primary-bg-color: #1c1917;
+  --md-accent-fg-color: #e7c3b4;
+  --md-typeset-a-color: #e7c3b4;
+  --md-default-bg-color: #1c1917;
+  --md-default-fg-color: #f6f1e8;
+  --md-footer-bg-color: #141210;
+  --md-footer-fg-color: #f6f1e8;
+}
+
+.md-typeset h1 {
+  font-weight: 650;
+}
