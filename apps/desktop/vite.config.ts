@@ -1,10 +1,12 @@
 import { execFileSync } from "node:child_process"
 import fs from "node:fs"
+import http from "node:http"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import type { IncomingMessage, ServerResponse } from "node:http"
 import react from "@vitejs/plugin-react"
-import { defineConfig } from "vite"
+import { defineConfig, type Plugin } from "vite"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
@@ -43,24 +45,57 @@ function proxyTarget(): string {
   return "http://127.0.0.1:8765"
 }
 
+function forwardApi(req: IncomingMessage, res: ServerResponse, next: (error?: unknown) => void) {
+  const url = req.url || ""
+  if (!url.startsWith("/api")) {
+    next()
+    return
+  }
+  const target = new URL(proxyTarget())
+  const headers = { ...req.headers }
+  delete headers.host
+  delete headers.connection
+  const token = readToken()
+  if (token) headers.authorization = `Bearer ${token}`
+  const proxyReq = http.request(
+    {
+      hostname: target.hostname,
+      port: target.port,
+      method: req.method,
+      path: url,
+      headers,
+    },
+    (proxyRes) => {
+      res.writeHead(proxyRes.statusCode || 502, proxyRes.headers)
+      proxyRes.pipe(res)
+    },
+  )
+  proxyReq.on("error", () => {
+    if (!res.headersSent) {
+      res.writeHead(502, { "Content-Type": "text/plain; charset=utf-8" }).end("本地服务不可用")
+    }
+  })
+  req.pipe(proxyReq)
+}
+
+function apiProxy(): Plugin {
+  return {
+    name: "agentshelf-api-proxy",
+    configureServer(server) {
+      server.middlewares.use(forwardApi)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(forwardApi)
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), apiProxy()],
   server: {
     host: "127.0.0.1",
     port: 1420,
     strictPort: true,
-    proxy: {
-      "/api": {
-        target: "http://127.0.0.1:8765",
-        router: () => proxyTarget(),
-        configure(proxy) {
-          proxy.on("proxyReq", (proxyReq) => {
-            const token = readToken()
-            if (token) proxyReq.setHeader("Authorization", `Bearer ${token}`)
-          })
-        },
-      },
-    },
   },
   build: {
     target: "es2022",

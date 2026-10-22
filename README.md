@@ -2,6 +2,8 @@
 
 AgentShelf 是一个本地个人产物库，用来保存 AI 最终产出的文件，并在本机完成检索、预览、版本和备份。正常使用不需要互联网，也不会把文件、检索词或使用记录发到外部服务。
 
+产品介绍、快速开始和使用说明见 [docs/README.md](docs/README.md)。
+
 ## 技术方案
 
 桌面窗口使用 Tauri 2 承载 React 界面，并由它启动、监督和关闭本地 Python 服务。业务只走这一套 FastAPI：手动上传、CLI 和 Skill 共用归档、哈希、去重、版本和索引规则，不直接写数据库。
@@ -34,7 +36,15 @@ chmod +x scripts/dev.sh
 ./scripts/dev.sh
 ```
 
-脚本会准备虚拟环境、启动本地服务，并打开界面：<http://127.0.0.1:1420>。
+脚本会准备虚拟环境、启动本地服务，并打开界面：<http://127.0.0.1:1420>。关闭这个终端时，由它启动的服务会一起停止。
+
+Skill 归档前使用的是后台启动器。它会在仓库里准备依赖，拉起后端和桌面界面，然后退出；服务继续在后台运行。已经启动过时会直接复用。
+
+```bash
+python3 scripts/launch.py
+```
+
+成功时输出以 `AGENTSHELF_LAUNCHED` 开头，并带上本机 `agentshelf` 命令的路径。需要桌面窗口而不是浏览器界面时，执行 `python3 scripts/launch.py --desktop tauri`。这需要本机已安装 Rust。
 
 只启动服务：
 
@@ -74,56 +84,11 @@ agentshelf stop
 
 ## 安装 Skill
 
-`skill/agentshelf-archive` 让 Agent 在你明确要求归档时调用本机 `agentshelf`。它和界面上传走同一套规则，只保存确认过的最终成果，不收集思考过程、日志和中间文件。
+把下面这段话发给 Agent，由它从本仓库安装归档 Skill：
 
-先让命令行可用，并保证本地服务已经在跑：
-
-```bash
-source .venv/bin/activate
-pip install -e .
-agentshelf status
+```text
+请从 https://github.com/atorber/agentshelf 安装 Skill agentshelf-archive（目录 skill/agentshelf-archive）。安装到我当前使用的 Agent 的用户级 skills 目录，使所有项目可用。安装完成后告诉我安装位置。
 ```
-
-`agentshelf status` 能连上本机服务后，再安装 Skill。
-
-还没有这份仓库时，从 GitHub 安装。仓库地址是 <https://github.com/atorber/agentshelf>，Skill 在 `main` 分支的 `skill/agentshelf-archive`。
-
-只下载 Skill 文件，安装到当前用户的所有 Cursor 项目：
-
-```bash
-mkdir -p ~/.cursor/skills/agentshelf-archive
-curl -fsSL \
-  -o ~/.cursor/skills/agentshelf-archive/SKILL.md \
-  https://raw.githubusercontent.com/atorber/agentshelf/main/skill/agentshelf-archive/SKILL.md
-```
-
-克隆仓库后再复制。以后 Skill 目录里如果增加了脚本或说明，用这种方式可以一次拿全：
-
-```bash
-git clone --depth 1 https://github.com/atorber/agentshelf.git
-mkdir -p ~/.cursor/skills
-cp -R agentshelf/skill/agentshelf-archive ~/.cursor/skills/
-```
-
-已经在仓库目录里时，给当前用户的所有项目使用（Cursor）：
-
-```bash
-mkdir -p ~/.cursor/skills
-cp -R skill/agentshelf-archive ~/.cursor/skills/
-```
-
-只在本仓库使用（Cursor）：
-
-```bash
-mkdir -p .cursor/skills
-cp -R skill/agentshelf-archive .cursor/skills/
-```
-
-Claude Code 的个人技能目录是 `~/.claude/skills`，项目技能目录是 `.claude/skills`，复制方式相同。其他会读取 `SKILL.md` 的 Agent，把该目录放到它自己的 skills 目录，文件夹名保持 `agentshelf-archive`。
-
-不要复制到 `~/.cursor/skills-cursor`。那个目录由 Cursor 自己管理。
-
-装好后新开一轮对话，直接说“把这个最终稿归档到 AgentShelf”。Agent 会执行 `agentshelf archive`。内容已存在时退出码为 2，它会把候选产物列出来，等你选择新建还是追加版本。
 
 ## 主要接口
 

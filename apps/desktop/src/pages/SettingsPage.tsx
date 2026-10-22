@@ -167,7 +167,7 @@ export function SettingsPage() {
 
       <div className="panel stack">
         <h2>Skill 安装</h2>
-        <p>把仓库里的 skill/agentshelf-archive 复制到 Agent 的 skills 目录。Skill 只调用本机 CLI，不直接改存储。</p>
+        <p>安装 Skill 后，让 Agent 归档时会先运行仓库里的 scripts/launch.py，把后端和桌面界面准备好，再登记产物。</p>
         <pre className="mono">{`agentshelf archive ./最终稿.md --title "周报" --project "工作" --tags "报告" --source "cursor"`}</pre>
         <p className="muted">如果命令退出码是 2，表示相同内容已存在。需要明确选择 --new-artifact，或用 --artifact-id 追加版本。不要按文件名覆盖。</p>
       </div>
