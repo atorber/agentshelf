@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"AgentShelf 主窗口可以调用本地会话命令","local":true,"windows":["main"],"permissions":["core:default"]}}

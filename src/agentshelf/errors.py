@@ -1,0 +1,6 @@
+class LibraryError(Exception):
+    def __init__(self, status: int, message: str, **extra: object) -> None:
+        super().__init__(message)
+        self.status = status
+        self.message = message
+        self.extra = extra

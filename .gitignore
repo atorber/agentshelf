@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AgentShelf local runtime and desktop build output
+node_modules/
+apps/desktop/dist/
+.agentshelf-dev.log
+.agentshelf-dev.pid
