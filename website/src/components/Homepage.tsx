@@ -38,7 +38,7 @@ export default function Homepage() {
       <header className={styles.hero}>
         <h1>AgentShelf</h1>
         <p className={styles.lead}>面向多个 AI Agent 的本地知识库。任务结束后，把值得留下的最终稿收进这台电脑，在一个窗口里检索、预览和保留版本。</p>
-        <p className={styles.meta}>当前版本 0.3.1 · macOS 与 Windows · 文件、检索词和使用记录都留在本机</p>
+        <p className={styles.meta}>当前版本 0.3.2 · macOS 与 Windows · 文件、检索词和使用记录都留在本机</p>
         <div className={styles.actions}>
           <Link className="button button--primary" to="/quickstart">
             安装并归档第一份

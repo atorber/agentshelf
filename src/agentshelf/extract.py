@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+from html.parser import HTMLParser
 from pathlib import Path
 
 TEXT_LIMIT = 500_000
@@ -16,6 +17,8 @@ def extract_text(path: Path, kind: str) -> tuple[str, str, str]:
     try:
         if kind == "pdf":
             return _pdf_text(path), "done", ""
+        if kind == "html":
+            return _html_text(path), "done", ""
         if kind in {"markdown", "text", "csv", "json"}:
             return _read_text(path), "done", ""
         if kind == "image":
@@ -52,6 +55,10 @@ def _pdf_text(path: Path) -> str:
 
 
 def preview_payload(path: Path, kind: str) -> dict:
+    if kind == "html":
+        text = _html_text(path)
+        truncated = len(text) > PREVIEW_TEXT_LIMIT
+        return {"text": text[:PREVIEW_TEXT_LIMIT], "truncated": truncated}
     if kind in {"markdown", "text"}:
         text = _read_text(path)
         truncated = len(text) > PREVIEW_TEXT_LIMIT
@@ -85,6 +92,33 @@ def preview_payload(path: Path, kind: str) -> dict:
     if kind in {"image", "video"}:
         return {}
     return {"error": "此格式暂不支持直接预览，可以下载原始文件。"}
+
+
+class _VisibleHtml(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._skip = 0
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # noqa: ANN001
+        if tag.lower() in {"script", "style", "noscript"}:
+            self._skip += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() in {"script", "style", "noscript"} and self._skip:
+            self._skip -= 1
+        if tag.lower() in {"p", "div", "br", "li", "h1", "h2", "h3", "h4", "tr", "title"}:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if not self._skip:
+            self.parts.append(data)
+
+
+def _html_text(path: Path) -> str:
+    parser = _VisibleHtml()
+    parser.feed(_read_text(path))
+    return " ".join("".join(parser.parts).split())[:TEXT_LIMIT]
 
 
 def _csv_rows(text: str) -> tuple[list[list[str]], bool]:

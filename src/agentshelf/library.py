@@ -1865,16 +1865,28 @@ def _search_row(conn, row, query: str) -> dict:
         body = row["body_snippet"] if "body_snippet" in row.keys() else ""
         title = row["title_snippet"] if "title_snippet" in row.keys() else ""
         snippet = body or title or ""
-    counted = conn.execute(
+    listed = conn.execute(
         """
-        SELECT COUNT(*) AS n
+        SELECT vf.public_id, vf.original_filename, vf.mime_type, vf.size_bytes, vf.sha256, vf.preview_kind
         FROM version_files vf
         JOIN artifact_versions v ON v.id = vf.version_id
         WHERE v.public_id = ?
+        ORDER BY vf.position, vf.id
         """,
         (row["version_id"],),
-    ).fetchone()
-    file_count = int(counted["n"]) if counted else 1
+    ).fetchall()
+    files = [
+        {
+            "id": item["public_id"],
+            "filename": item["original_filename"],
+            "mime_type": item["mime_type"],
+            "size_bytes": int(item["size_bytes"]),
+            "sha256": item["sha256"],
+            "preview_kind": item["preview_kind"],
+        }
+        for item in listed
+    ]
+    file_count = len(files)
     return {
         "artifact_id": row["artifact_id"],
         "version_id": row["version_id"],
@@ -1891,6 +1903,8 @@ def _search_row(conn, row, query: str) -> dict:
         "updated_at": row["updated_at"],
         "is_current": bool(row["is_current"]),
         "file_count": file_count or 1,
+        "files": files,
+        "size_bytes": sum(item["size_bytes"] for item in files),
         "snippet": snippet,
     }
 

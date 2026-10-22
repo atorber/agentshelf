@@ -1,12 +1,12 @@
 ---
 name: agentshelf-archive
-version: 0.3.1
-description: 把当前任务的最终稿归档到本地知识库。用户说「把这份最终稿归档到 AgentShelf」或要求保存最终稿、收入知识库时使用。自行确定文件，并填写名称、项目、标签、来源和描述，不要向用户索要这些字段。调用前比较本 Skill 版本和正在运行的服务版本。本 Skill 更高时，下载对应版本的启动器二进制，停掉旧服务后再启动。版本一致且服务已启动就直接使用。否则检查发布的启动器二进制；没有就从该版本的 GitHub Release 下载。下载失败再用 ~/.agentshelf/app 里的 scripts/launch.py，最后才用当前仓库。不要克隆仓库。不要归档思考过程、日志或中间文件。
+version: 0.3.2
+description: 把当前任务的最终稿归档到本地知识库。用户说「把这份最终稿归档到 AgentShelf」或要求保存最终稿、收入知识库时使用。自行确定文件，并填写名称、项目、标签、来源和描述，不要向用户索要这些字段。用户要求 HTML 或网页时正文必须是 .html。普通文档用 Markdown；只有版式或交互需要时才写成 HTML。调用前比较本 Skill 版本和正在运行的服务版本。本 Skill 更高时，下载对应版本的启动器二进制，停掉旧服务后再启动。版本一致且服务已启动就直接使用。否则检查发布的启动器二进制；没有就从该版本的 GitHub Release 下载。下载失败再用 ~/.agentshelf/app 里的 scripts/launch.py，最后才用当前仓库。不要克隆仓库。不要归档思考过程、日志或中间文件。
 ---
 
 # AgentShelf 归档
 
-版本 0.3.1。
+版本 0.3.2。
 
 用户要求归档时，只归档当前任务的最终成果。先完成下面的部署，再使用启动器输出的 `bin` 调用本地服务。不要直接修改数据库或存储目录，也不要按文件名猜测并覆盖已有知识。
 
@@ -20,7 +20,7 @@ description: 把当前任务的最终稿归档到本地知识库。用户说「�
 
 1. 先检查服务是否已经启动。macOS 读取 `~/Library/Application Support/AgentShelf/runtime.json`，Linux 读取 `~/.local/share/AgentShelf/runtime.json`，Windows 读取 `%LOCALAPPDATA%\AgentShelf\runtime.json`。文件里有 `port` 时，请求 `http://127.0.0.1:<port>/api/health`。返回成功且 `version` 不低于本 Skill 时，直接使用这个服务，后面的下载和启动都跳过。`version` 低于本 Skill 时不要使用，转到版本升级。
 2. 服务没在运行时，检查发布的二进制。macOS 和 Linux 为 `~/.agentshelf/bin/agentshelf-launcher`，Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`。文件存在且可以执行时，先运行 `"<路径>" --version`。输出不低于本 Skill 版本才直接运行，不要加别的参数。版本更低时不要运行，转到版本升级。
-3. 二进制不存在，且不需要版本升级时，从与本 Skill 版本对应的 GitHub Release 下载与本机系统对应的文件，保存为第 2 步的路径后再运行。标签是 `v` 加上本 Skill 版本，例如 `v0.3.1`。不要用 `latest` 代替这个标签，也不要克隆仓库来代替下载。
+3. 二进制不存在，且不需要版本升级时，从与本 Skill 版本对应的 GitHub Release 下载与本机系统对应的文件，保存为第 2 步的路径后再运行。标签是 `v` 加上本 Skill 版本，例如 `v0.3.2`。不要用 `latest` 代替这个标签，也不要克隆仓库来代替下载。
 4. 下载失败时，使用 `~/.agentshelf/app` 里的 `scripts/launch.py`。Windows 为 `%USERPROFILE%\.agentshelf\app\scripts\launch.py`。这个文件不存在就跳过。版本升级的下载失败不要走这一步。
 5. 最后才使用当前仓库。当前工作区包含 `scripts/launch.py`，且 `pyproject.toml` 里的项目名是 `agentshelf` 时，用这份源码启动。前面的办法都不可用时，报告下载地址和错误并停止，不要声称已经打开。版本升级失败时不要改用旧二进制或当前仓库。
 
@@ -58,7 +58,7 @@ Windows 上没有 `python3` 时改用 `py -3 scripts/launch.py`。
 | Linux | aarch64 | `agentshelf-launcher-linux-arm64` |
 | Windows | x64 | `agentshelf-launcher-windows-x64.exe` |
 
-文件地址是 `https://github.com/atorber/agentshelf/releases/download/v<版本>/<文件名>`。`<版本>` 是本 Skill 的 `version`，标签不要再加别的字符。例如版本 `0.3.1` 对应 `https://github.com/atorber/agentshelf/releases/download/v0.3.1/<文件名>`。校验文件是同一地址加上 `.sha256`，内容是一行 SHA-256 十六进制摘要。不要改用 `latest`。
+文件地址是 `https://github.com/atorber/agentshelf/releases/download/v<版本>/<文件名>`。`<版本>` 是本 Skill 的 `version`，标签不要再加别的字符。例如版本 `0.3.2` 对应 `https://github.com/atorber/agentshelf/releases/download/v0.3.2/<文件名>`。校验文件是同一地址加上 `.sha256`，内容是一行 SHA-256 十六进制摘要。不要改用 `latest`。
 
 macOS 和 Linux：
 
@@ -102,9 +102,22 @@ AGENTSHELF_LAUNCHED {"backend":"http://127.0.0.1:8765","desktop":"http://127.0.0
 - 同一份最终成果包含多个文件时，放进同一条知识，用一条归档命令一次传入这些路径。不要拆成多条知识。
 - 用户明确要留下多份彼此独立的成果时，才分别归档。
 
+### 选择正文格式
+
+正文用 Markdown 或 HTML，二选一。
+
+用户说出 HTML、网页或 `.html` 时，正文必须是 `.html`。已有的 Markdown 或其他文稿先改成这个 HTML 再归档，不要把原格式留成正文。
+
+没有指定格式时，按这份成果的特点选择：
+
+- 需要卡片、多栏、时间线、对照版式，或筛选、切换、折叠、计算这类交互时，写成 `.html`。样式和脚本放在这一个文件里。
+- 说明、记录、方案、清单和普通报告用 Markdown。不要为了换一种外观把普通文档改成 HTML。
+
+已经是 `.html` 的最终稿直接归档。名称取 `<title>` 或一级标题。图片、视频和其他附件用文件名引用，并和正文放进同一条知识：`<img src="登录页.png" alt="登录页">`、`<video src="演示.mp4" controls></video>`、`<a href="部署说明.md">部署说明</a>`。文件名必须和实际文件一致。不要依赖页面外面的样式或脚本才能阅读。
+
 ### 把图片、视频和附件写进正文
 
-最终成果是一份文档，并且还有图片、视频或其他附件时，先改文档，再归档。不要只把这些文件和文档放进同一条命令。
+最终成果是一份文档，并且还有图片、视频或其他附件时，先改文档，再归档。不要只把这些文件和文档放进同一条命令。正文是 HTML 时，按「选择正文格式」里的标签引用这些文件，不要改成 Markdown 图片语法。
 
 - 图片和视频插在讲到它们的那一段、那张表或那个小节后面。写成 `![登录页](1panel-登录页截图.png)`、`![演示](演示.mp4)`。方括号里写这句话在说什么，圆括号里的文件名必须和实际文件一致。
 - 其他附件放成链接，写在相关小节里，例如 `[部署说明](1Panel部署说明.md)`。
@@ -118,7 +131,7 @@ AGENTSHELF_LAUNCHED {"backend":"http://127.0.0.1:8765","desktop":"http://127.0.0
 
 | 字段 | 怎么得到 |
 |---|---|
-| 名称 | 文档标题，例如 Markdown 一级标题。没有标题时用去掉扩展名的文件名。不要把「最终稿」当作名称 |
+| 名称 | 文档标题，例如 Markdown 一级标题，或 HTML 的 title、一级标题。没有标题时用去掉扩展名的文件名。不要把「最终稿」当作名称 |
 | 项目 | 当前工作区或仓库的项目名 |
 | 标签 | 根据内容取 1 到 3 个短标签，逗号分隔 |
 | 来源 | 当前 Agent 的名称，例如 Cursor、Claude Code、Codex |

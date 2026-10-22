@@ -17,6 +17,22 @@ export function formatTime(value?: string): string {
   return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date)
 }
 
+export function formatRelative(value?: string, now = new Date()): string {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60000)
+  if (minutes < 1) return "刚刚"
+  if (minutes < 60) return `${minutes}分钟前`
+  const startOfDay = (item: Date) => new Date(item.getFullYear(), item.getMonth(), item.getDate()).getTime()
+  const days = Math.round((startOfDay(now) - startOfDay(date)) / 86400000)
+  if (days <= 0) return `${Math.floor(minutes / 60)}小时前`
+  if (days === 1) return "昨天"
+  if (days < 7) return `${days}天前`
+  const sameYear = date.getFullYear() === now.getFullYear()
+  return new Intl.DateTimeFormat("zh-CN", sameYear ? { month: "numeric", day: "numeric" } : { year: "numeric", month: "numeric", day: "numeric" }).format(date)
+}
+
 const LIBRARY_KEY = "agentshelf.library.search"
 
 export function rememberLibrary(search: string) {
@@ -61,6 +77,7 @@ export function sameFile(left: { id?: string; filename: string; sha256: string }
 
 export const kindLabel: Record<string, string> = {
   markdown: "Markdown",
+  html: "HTML",
   text: "文本",
   csv: "CSV",
   json: "JSON",
@@ -68,4 +85,20 @@ export const kindLabel: Record<string, string> = {
   video: "视频",
   pdf: "PDF",
   unsupported: "其他",
+}
+
+export const typeLabel: Record<string, string> = {
+  markdown: "文档",
+  text: "文档",
+  pdf: "文档",
+  html: "网页",
+  csv: "表格",
+  json: "代码",
+  image: "图片",
+  video: "视频",
+  unsupported: "其他",
+}
+
+export function bodyFile<T extends { filename: string; preview_kind?: string }>(files: T[]): T | undefined {
+  return files.find((file) => displayKind(file) === "markdown") || files.find((file) => displayKind(file) === "html") || files[0]
 }

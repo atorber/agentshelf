@@ -1,4 +1,4 @@
-import { Component, useEffect, useState, type ReactNode } from "react"
+import { Component, useEffect, useRef, useState, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { artifactQuery, fetchVerifiedBlob, preview } from "../api"
@@ -136,6 +136,9 @@ function PreviewBody({ artifactId, versionId, fileId, assets = [], embedAssets =
       </div>
     )
   }
+  if (data.preview_kind === "html") {
+    return <HtmlPreview artifactId={artifactId} versionId={versionId} fileId={fileId} assets={assets} onOpenAsset={onOpenAsset} />
+  }
   if (data.preview_kind === "text") {
     return (
       <div className="preview-frame">
@@ -194,6 +197,141 @@ function PreviewBody({ artifactId, versionId, fileId, assets = [], embedAssets =
     )
   }
   return <div className="preview-frame center">此格式暂不支持预览，可以用右上角的「下载」取得原始文件。</div>
+}
+
+const INLINE_LIMIT = 8 * 1024 * 1024
+
+function localName(value: string | null): string {
+  if (!value) return ""
+  const cleaned = value.split("#")[0].split("?")[0].trim()
+  if (!cleaned || /^[a-z][a-z0-9+.-]*:/i.test(cleaned) || cleaned.startsWith("//")) return ""
+  let name = cleaned.replace(/^\.\//, "")
+  try {
+    name = decodeURIComponent(name)
+  } catch {
+    /* 保持原样 */
+  }
+  return name.split("/").pop() || name
+}
+
+function matchAsset(value: string | null, assets: ArtifactFile[]) {
+  const name = localName(value)
+  if (!name) return undefined
+  return assets.find((file) => file.filename === name)
+}
+
+async function assetBytes(artifactId: string, versionId: string | undefined, file: ArtifactFile) {
+  const downloaded = await fetchVerifiedBlob(`/api/artifacts/${artifactId}/download${artifactQuery(versionId, file.id || undefined)}`)
+  if (!downloaded.verified) throw new Error("哈希校验失败，已停止预览")
+  return downloaded.blob
+}
+
+function bytesToDataUrl(blob: Blob, mime: string) {
+  return blob.arrayBuffer().then((buffer) => {
+    const bytes = new Uint8Array(buffer)
+    let binary = ""
+    for (let index = 0; index < bytes.length; index += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
+    }
+    return `data:${mime || "application/octet-stream"};base64,${btoa(binary)}`
+  })
+}
+
+async function rewriteHtml(html: string, artifactId: string, versionId: string | undefined, assets: ArtifactFile[]) {
+  const doc = new DOMParser().parseFromString(html, "text/html")
+  const swap = async (value: string | null) => {
+    const file = matchAsset(value, assets)
+    if (!file || file.size_bytes > INLINE_LIMIT) return ""
+    const blob = await assetBytes(artifactId, versionId, file)
+    return bytesToDataUrl(blob, file.mime_type)
+  }
+  for (const node of doc.querySelectorAll("img, video, audio, source")) {
+    const src = node.getAttribute("src")
+    const file = matchAsset(src, assets)
+    if (!file) continue
+    if (file.size_bytes > INLINE_LIMIT) {
+      node.setAttribute("data-agentshelf-file", file.filename)
+      node.removeAttribute("src")
+      continue
+    }
+    const url = await swap(src)
+    if (url) node.setAttribute("src", url)
+  }
+  for (const node of doc.querySelectorAll("link[href]")) {
+    const file = matchAsset(node.getAttribute("href"), assets)
+    if (!file || file.size_bytes > INLINE_LIMIT) continue
+    const blob = await assetBytes(artifactId, versionId, file)
+    const style = doc.createElement("style")
+    style.textContent = await blob.text()
+    node.replaceWith(style)
+  }
+  for (const node of doc.querySelectorAll("script[src]")) {
+    const file = matchAsset(node.getAttribute("src"), assets)
+    if (!file || file.size_bytes > INLINE_LIMIT) continue
+    const blob = await assetBytes(artifactId, versionId, file)
+    const script = doc.createElement("script")
+    script.textContent = await blob.text()
+    node.replaceWith(script)
+  }
+  for (const node of doc.querySelectorAll("a[href]")) {
+    const file = matchAsset(node.getAttribute("href"), assets)
+    if (!file) continue
+    node.setAttribute("href", "#")
+    node.setAttribute("data-agentshelf-file", file.filename)
+  }
+  const bridge = doc.createElement("script")
+  bridge.textContent = `document.addEventListener("click", (event) => {
+    const target = event.target && event.target.closest ? event.target.closest("[data-agentshelf-file]") : null
+    if (!target) return
+    event.preventDefault()
+    parent.postMessage({ type: "agentshelf-open", filename: target.getAttribute("data-agentshelf-file") }, "*")
+  })`
+  doc.body.append(bridge)
+  return `<!DOCTYPE html>${doc.documentElement.outerHTML}`
+}
+
+function HtmlPreview({ artifactId, versionId, fileId, assets = [], onOpenAsset }: Props) {
+  const frame = useRef<HTMLIFrameElement>(null)
+  const [srcDoc, setSrcDoc] = useState("")
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    let cancelled = false
+    setSrcDoc("")
+    setError("")
+    fetchVerifiedBlob(`/api/artifacts/${artifactId}/download${artifactQuery(versionId, fileId)}`)
+      .then(async (file) => {
+        if (!file.verified) throw new Error("哈希校验失败，已停止预览")
+        const html = await rewriteHtml(await file.blob.text(), artifactId, versionId, assets)
+        if (!cancelled) setSrcDoc(html)
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : "预览失败")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [artifactId, assets, fileId, versionId])
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.source !== frame.current?.contentWindow) return
+      const payload = event.data as { type?: string; filename?: string }
+      if (!payload || payload.type !== "agentshelf-open" || typeof payload.filename !== "string") return
+      const file = assets.find((item) => item.filename === payload.filename)
+      if (file && onOpenAsset) onOpenAsset(file)
+    }
+    window.addEventListener("message", onMessage)
+    return () => window.removeEventListener("message", onMessage)
+  }, [assets, onOpenAsset])
+
+  if (error) return <div className="preview-frame center error">{error}</div>
+  if (!srcDoc) return <div className="preview-frame center">正在准备预览…</div>
+  return (
+    <div className="preview-frame html">
+      <iframe ref={frame} title="HTML 预览" sandbox="allow-scripts allow-forms" srcDoc={srcDoc} />
+    </div>
+  )
 }
 
 function InlineAsset({ artifactId, versionId, file, alt }: { artifactId: string; versionId?: string; file: ArtifactFile; alt?: string }) {

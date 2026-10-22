@@ -1,4 +1,4 @@
-export type PreviewKind = "markdown" | "text" | "csv" | "json" | "image" | "video" | "pdf" | "unsupported"
+export type PreviewKind = "markdown" | "html" | "text" | "csv" | "json" | "image" | "video" | "pdf" | "unsupported"
 
 export interface ArtifactFile {
   id: string
@@ -45,6 +45,15 @@ export interface Artifact {
   stored_new_blob?: boolean
 }
 
+export interface LibraryFile {
+  id: string
+  filename: string
+  mime_type: string
+  size_bytes: number
+  sha256: string
+  preview_kind: PreviewKind
+}
+
 export interface LibraryItem {
   artifact_id: string
   version_id: string
@@ -61,6 +70,8 @@ export interface LibraryItem {
   updated_at: string
   is_current: boolean
   file_count: number
+  files: LibraryFile[]
+  size_bytes: number
   snippet: string
   score?: number
 }

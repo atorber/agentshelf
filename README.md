@@ -46,7 +46,7 @@ python3 scripts/launch.py
 
 成功时输出以 `AGENTSHELF_LAUNCHED` 开头，并带上本机 `agentshelf` 命令的路径。需要桌面窗口而不是浏览器界面时，执行 `python3 scripts/launch.py --desktop tauri`。这需要本机已安装 Rust。
 
-发布 GitHub Release 时，工作流会把启动器编译成各系统的单个可执行文件，连同 SHA-256 校验文件上传到该 Release。标签形如 `v0.3.1`。本机没有对应版本的 `~/.agentshelf/bin/agentshelf-launcher`（Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`），或正在运行的服务比 Skill 旧时，Skill 从该标签下载对应系统的文件，并在升级时重启服务。这个文件包含后端和本机界面，运行时不需要另外安装 Python 或 Node。下载失败时，再用 `~/.agentshelf/app` 里的 `scripts/launch.py`，最后才用当前仓库。版本升级的下载失败则停住，不改用旧二进制。
+发布 GitHub Release 时，工作流会把启动器编译成各系统的单个可执行文件，连同 SHA-256 校验文件上传到该 Release。标签形如 `v0.3.2`。本机没有对应版本的 `~/.agentshelf/bin/agentshelf-launcher`（Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`），或正在运行的服务比 Skill 旧时，Skill 从该标签下载对应系统的文件，并在升级时重启服务。这个文件包含后端和本机界面，运行时不需要另外安装 Python 或 Node。下载失败时，再用 `~/.agentshelf/app` 里的 `scripts/launch.py`，最后才用当前仓库。版本升级的下载失败则停住，不改用旧二进制。
 
 只启动服务：
 
@@ -123,7 +123,7 @@ agentshelf stop
 
 语义检索需要自行安装可选依赖 `pip install -e ".[semantic]"`，并导入含 `config.json` 与权重文件的本地模型目录。应用不会下载模型。
 
-预览支持 Markdown、文本、CSV、JSON、PNG/JPEG/GIF/WebP 和 PDF。其他格式提供下载。SVG 不作为图片内嵌预览。
+预览支持 Markdown、HTML、文本、CSV、JSON、PNG/JPEG/GIF/WebP 和 PDF。HTML 在隔离页面里显示样式和页面内交互。其他格式提供下载。SVG 不作为图片内嵌预览。
 
 ## 备份
 

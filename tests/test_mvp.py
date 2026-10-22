@@ -212,6 +212,20 @@ def test_previews_for_supported_and_corrupt_files(client):
     assert corrupt_preview.status_code == 200
     assert client.get("/api/health").status_code == 200
 
+    page = upload(
+        client,
+        "page.html",
+        "<!doctype html><html><head><title>星港页面</title><script>const hidden = '脚本里的暗语xyz'</script></head><body><h1>星港页面</h1><p>可见段落星港正文</p></body></html>".encode(),
+        title="星港页面",
+    )
+    assert page.status_code == 201, page.text
+    html_preview = client.get(f"/api/artifacts/{page.json()['id']}/preview")
+    assert html_preview.json()["preview_kind"] == "html"
+    assert "可见段落星港正文" in html_preview.json()["text"]
+    assert "脚本里的暗语xyz" not in html_preview.json()["text"]
+    assert client.get("/api/search", params={"q": "可见段落星港正文"}).json()["total"] == 1
+    assert client.get("/api/search", params={"q": "脚本里的暗语xyz"}).json()["total"] == 0
+
     disguised = upload(client, "evil.png", b"<script>alert(1)</script>")
     assert disguised.json()["current_version"]["preview_kind"] == "unsupported"
     unsupported = client.get(f"/api/artifacts/{disguised.json()['id']}/preview")
@@ -233,7 +247,10 @@ def test_one_artifact_can_hold_multiple_files(client):
     assert version["file_count"] == 2
     assert [item["filename"] for item in version["files"]] == ["设计.md", "图.png"]
     listed = client.get("/api/artifacts")
-    assert listed.json()["items"][0]["file_count"] == 2
+    row = listed.json()["items"][0]
+    assert row["file_count"] == 2
+    assert [item["id"] for item in row["files"]] == [item["id"] for item in version["files"]]
+    assert row["size_bytes"] == sum(item["size_bytes"] for item in version["files"])
     markdown = version["files"][0]
     preview = client.get(f"/api/artifacts/{body['id']}/preview", params={"file_id": markdown["id"]})
     assert preview.status_code == 200

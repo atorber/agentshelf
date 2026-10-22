@@ -84,6 +84,8 @@ def guess_mime(filename: str, kind: str, head: bytes) -> str:
         return "image/webp"
     if kind == "markdown":
         return "text/markdown"
+    if kind == "html":
+        return "text/html"
     if kind == "csv":
         return "text/csv"
     if kind == "json":
@@ -111,6 +113,8 @@ def sniff_preview_kind(path: Path, filename: str, mime: str) -> str:
     mime_l = (mime or "").lower()
     if ext == ".svg" or mime_l == "image/svg+xml":
         return "unsupported"
+    if ext in {".html", ".htm"} or mime_l == "text/html":
+        return "html"
     if ext in {".md", ".markdown"} or mime_l == "text/markdown":
         return "markdown"
     if ext == ".csv" or mime_l == "text/csv":
