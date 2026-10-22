@@ -193,6 +193,11 @@ def test_previews_for_supported_and_corrupt_files(client):
     image_preview = client.get(f"/api/artifacts/{image.json()['id']}/preview")
     assert image_preview.json()["preview_kind"] == "image"
 
+    video = upload(client, "clip.mp4", b"\x00\x00\x00\x18ftypisom\x00\x00\x00\x00isommp42")
+    video_preview = client.get(f"/api/artifacts/{video.json()['id']}/preview")
+    assert video_preview.json()["preview_kind"] == "video"
+    assert not video_preview.json().get("error")
+
     buffer = io.BytesIO()
     writer = PdfWriter()
     writer.add_blank_page(72, 72)

@@ -19,7 +19,7 @@ const steps = [
   {
     n: "03",
     title: "在窗口里确认",
-    text: "一个文件直接预览。多个文件先列出，再用标签切换。版本、来源和备份都在同一处。",
+    text: "正文按文档阅读。图片、视频和附件列在右侧，也能嵌在正文里。",
     href: "/usage",
     more: "窗口说明",
   },
@@ -38,7 +38,7 @@ export default function Homepage() {
       <header className={styles.hero}>
         <h1>AgentShelf</h1>
         <p className={styles.lead}>面向多个 AI Agent 的本地最终产物库。任务结束后，把值得留下的最终稿收进这台电脑，在一个窗口里检索、预览和保留版本。</p>
-        <p className={styles.meta}>当前版本 0.2.2 · macOS 与 Windows · 文件、检索词和使用记录都留在本机</p>
+        <p className={styles.meta}>当前版本 0.2.3 · macOS 与 Windows · 文件、检索词和使用记录都留在本机</p>
         <div className={styles.actions}>
           <Link className="button button--primary" to="/quickstart">
             安装并归档第一份

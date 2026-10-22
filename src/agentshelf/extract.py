@@ -82,7 +82,7 @@ def preview_payload(path: Path, kind: str) -> dict:
         except Exception as exc:  # noqa: BLE001
             error = f"PDF 结构无法读取：{exc}"[:300]
         return {"page_count": page_count, "error": error}
-    if kind == "image":
+    if kind in {"image", "video"}:
         return {}
     return {"error": "此格式暂不支持直接预览，可以下载原始文件。"}
 

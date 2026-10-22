@@ -39,12 +39,33 @@ export function fileSummary(count: number, filename: string): string {
   return count > 1 ? `${count} 个文件` : filename
 }
 
+const VIDEO_EXT = ["mp4", "webm", "mov", "m4v", "ogv"]
+
+export function fileExtension(filename: string): string {
+  const base = filename.split(/[/\\]/).pop() || filename
+  const dot = base.lastIndexOf(".")
+  return dot >= 0 ? base.slice(dot + 1).toLowerCase() : ""
+}
+
+export function displayKind(file: { filename: string; preview_kind?: string }): string {
+  const kind = file.preview_kind || ""
+  if (kind && kind !== "unsupported") return kind
+  if (VIDEO_EXT.includes(fileExtension(file.filename))) return "video"
+  return kind || "unsupported"
+}
+
+export function sameFile(left: { id?: string; filename: string; sha256: string }, right: { id?: string; filename: string; sha256: string }) {
+  if (left.id && right.id) return left.id === right.id
+  return left.filename === right.filename && left.sha256 === right.sha256
+}
+
 export const kindLabel: Record<string, string> = {
   markdown: "Markdown",
   text: "文本",
   csv: "CSV",
   json: "JSON",
   image: "图片",
+  video: "视频",
   pdf: "PDF",
   unsupported: "其他",
 }

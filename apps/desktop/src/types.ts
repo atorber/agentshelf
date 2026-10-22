@@ -1,4 +1,4 @@
-export type PreviewKind = "markdown" | "text" | "csv" | "json" | "image" | "pdf" | "unsupported"
+export type PreviewKind = "markdown" | "text" | "csv" | "json" | "image" | "video" | "pdf" | "unsupported"
 
 export interface ArtifactFile {
   id: string

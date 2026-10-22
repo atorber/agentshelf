@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 import { deleteArtifact, downloadArtifact, getArtifact, restoreVersion, updateArtifact, verify } from "../api"
 import { Icon } from "../components/Icon"
 import { PreviewPane } from "../components/PreviewPane"
-import { fileSummary, formatBytes, formatTime, kindLabel, libraryPath } from "../format"
+import { displayKind, fileSummary, formatBytes, formatTime, kindLabel, libraryPath, sameFile } from "../format"
 import type { Artifact, ArtifactFile, Version } from "../types"
 
 function listedFiles(version: Version): ArtifactFile[] {
@@ -75,10 +75,11 @@ export function DetailPage() {
 
   const selected = artifact?.versions.find((item) => item.id === versionId) || artifact?.current_version
   const files = selected ? listedFiles(selected) : []
-  const multiple = files.length > 1
+  const body = files.find((file) => displayKind(file) === "markdown") || files[0]
+  const sidecars = body ? files.filter((file) => !sameFile(file, body)) : []
   const opened = files.find((file) => file.id && file.id === fileId)
-  const showList = multiple && !opened
-  const shown = opened || (files.length === 1 ? files[0] : undefined)
+  const shown = opened || body
+  const inSidecar = Boolean(shown && body && !sameFile(shown, body))
 
   function versionParams() {
     const next = new URLSearchParams()
@@ -86,20 +87,24 @@ export function DetailPage() {
     return next
   }
 
-  function openFile(file: ArtifactFile) {
+  function openSidecar(file: ArtifactFile) {
+    if (body && sameFile(file, body)) {
+      backToDocument()
+      return
+    }
     const next = versionParams()
     if (file.id) next.set("file", file.id)
-    if (opened) setParams(next, { replace: true, state: location.state })
-    else setParams(next, { state: { fromList: true } })
+    if (inSidecar) setParams(next, { replace: true, state: location.state })
+    else setParams(next, { state: { fromDocument: true } })
   }
 
-  function backToFiles() {
-    if ((location.state as { fromList?: boolean } | null)?.fromList) navigate(-1)
+  function backToDocument() {
+    if ((location.state as { fromDocument?: boolean } | null)?.fromDocument) navigate(-1)
     else setParams(versionParams(), { replace: true })
   }
 
   function goUp() {
-    if (multiple && opened) backToFiles()
+    if (inSidecar) backToDocument()
     else navigate(libraryPath())
   }
 
@@ -187,27 +192,27 @@ export function DetailPage() {
         <nav className="crumbs" aria-label="位置">
           <Link to={libraryPath()}>产物库</Link>
           <span className="sep">/</span>
-          {multiple && opened ? (
-            <button onClick={backToFiles}>{artifact.title}</button>
+          {inSidecar ? (
+            <button onClick={backToDocument}>{artifact.title}</button>
           ) : (
             <span className={isOld ? "" : "here"}>{artifact.title}</span>
           )}
           {isOld ? (
             <>
               <span className="sep">/</span>
-              <span className={multiple && opened ? "" : "here"}>v{selected.version_number}</span>
+              <span className={inSidecar ? "" : "here"}>v{selected.version_number}</span>
             </>
           ) : null}
-          {multiple && opened ? (
+          {inSidecar && shown ? (
             <>
               <span className="sep">/</span>
-              <span className="here">{opened.filename}</span>
+              <span className="here">{shown.filename}</span>
             </>
           ) : null}
         </nav>
         <div className="page-head">
           <div className="title-row">
-            <button className="btn-ghost icon-btn" onClick={goUp} title={multiple && opened ? "返回文件列表" : "返回产物库"} aria-label={multiple && opened ? "返回文件列表" : "返回产物库"}>
+            <button className="btn-ghost icon-btn" onClick={goUp} title={inSidecar ? "返回正文" : "返回产物库"} aria-label={inSidecar ? "返回正文" : "返回产物库"}>
               <Icon name="back" />
             </button>
             <h1>{artifact.title}</h1>
@@ -233,56 +238,52 @@ export function DetailPage() {
       {notice ? <p className="notice">{notice}</p> : null}
       <div className="detail">
         <div className="panel viewer">
-          {showList ? (
-            <>
-              <div className="panel-head">
-                <h2>文件</h2>
-                <span className="muted small">{files.length} 个 · 点击预览</span>
-              </div>
-              <div className="files">
-                {files.map((file) => (
-                  <button
-                    className="item"
-                    key={file.id || file.sha256}
-                    onClick={() => openFile(file)}
-                  >
-                    <span className={`kind kind-${file.preview_kind}`}>{kindLabel[file.preview_kind] || file.preview_kind}</span>
-                    <span className="item-title">
-                      <span>{file.filename}</span>
-                    </span>
-                    <span className="item-meta">{formatBytes(file.size_bytes)}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              {multiple ? (
-                <div className="file-tabs" role="tablist">
-                  {files.map((file) => (
-                    <button key={file.id || file.sha256} role="tab" aria-selected={file.id === shown?.id} className={file.id === shown?.id ? "active" : ""} onClick={() => openFile(file)}>
-                      {file.filename}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              <PreviewPane artifactId={id} versionId={selected.id} fileId={shown?.id || undefined} />
-              {shown ? (
-                <div className="viewer-foot">
-                  <span className="muted small">
-                    {kindLabel[shown.preview_kind] || shown.preview_kind} · {shown.filename} · {formatBytes(shown.size_bytes)}
-                  </span>
-                  <span className="hash" title="SHA-256">
-                    {shown.sha256.slice(0, 16)}…
-                  </span>
-                </div>
-              ) : null}
-            </>
-          )}
+          {inSidecar ? (
+            <div className="panel-head">
+              <button className="btn-text" onClick={backToDocument}>
+                返回正文
+              </button>
+              <span className="muted small">{shown?.filename}</span>
+            </div>
+          ) : null}
+          <PreviewPane artifactId={id} versionId={selected.id} fileId={shown?.id || undefined} assets={files} onOpenAsset={openSidecar} />
+          {shown ? (
+            <div className="viewer-foot">
+              <span className="muted small">
+                {kindLabel[displayKind(shown)] || displayKind(shown)} · {shown.filename} · {formatBytes(shown.size_bytes)}
+              </span>
+              <span className="hash" title="SHA-256">
+                {shown.sha256.slice(0, 16)}…
+              </span>
+            </div>
+          ) : null}
           {extractTarget.extract_status === "pending" ? <div className="viewer-foot muted small">正在建立索引…</div> : null}
           {extractTarget.extract_error ? <div className="viewer-foot error small">{extractTarget.extract_error}</div> : null}
         </div>
         <aside>
+          {sidecars.length ? (
+            <div className="panel">
+              <div className="panel-head">
+                <h2>附件</h2>
+                <span className="muted small">{sidecars.length}</span>
+              </div>
+              <div className="files attach">
+                {sidecars.map((file) => {
+                  const kind = displayKind(file)
+                  const active = shown ? sameFile(file, shown) : false
+                  return (
+                    <button className={active ? "item active" : "item"} key={file.id || file.sha256} onClick={() => openSidecar(file)}>
+                      <span className={`kind kind-${kind}`}>{kindLabel[kind] || kind}</span>
+                      <span className="item-title">
+                        <span>{file.filename}</span>
+                        <span className="item-sub">{formatBytes(file.size_bytes)}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
           <div className="panel">
             <div className="panel-head">
               <h2>信息</h2>

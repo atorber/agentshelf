@@ -119,6 +119,8 @@ def sniff_preview_kind(path: Path, filename: str, mime: str) -> str:
         return "json"
     if ext in {".txt", ".log", ".text"} or mime_l.startswith("text/"):
         return "text"
+    if ext in {".mp4", ".webm", ".mov", ".m4v", ".ogv"} or mime_l.startswith("video/"):
+        return "video"
     if mime_l.startswith("image/"):
         return "unsupported"
     return "unsupported"
