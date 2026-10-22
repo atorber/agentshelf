@@ -123,6 +123,38 @@ export interface BackupItem {
   created_at: string
 }
 
+export interface CloudSettings {
+  configured: boolean
+  endpoint: string
+  region: string
+  bucket: string
+  prefix: string
+  access_key_id: string
+  secret_set: boolean
+  path_style: boolean
+  sync_bucket: string
+  sync_prefix: string
+  sync_configured: boolean
+}
+
+export interface SyncResult {
+  uploaded: number
+  deleted: number
+  files: number
+  prefix: string
+  bucket: string
+}
+
+export interface CloudInput {
+  endpoint: string
+  region: string
+  bucket: string
+  prefix: string
+  access_key_id: string
+  secret_access_key: string
+  path_style: boolean
+}
+
 export interface Status {
   version: string
   host: string

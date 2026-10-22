@@ -223,10 +223,10 @@ def search(
 
 
 @app.command()
-def backup() -> None:
-    """创建一份本地备份。"""
+def backup(cloud: bool = typer.Option(False, "--cloud", help="创建备份并上传到已配置的 S3 目录")) -> None:
+    """创建一份本地备份，或上传到已配置的 S3 目录。"""
     with _client() as client:
-        response = client.post("/api/backups")
+        response = client.post("/api/cloud/backup" if cloud else "/api/backups")
     _print_result(response, as_json=True)
 
 

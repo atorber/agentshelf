@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agentshelf.backup import create_backup, list_backups, resolve_backup, restore_backup
+from agentshelf.cloud import install_storage_tree
 from agentshelf.config import Settings, app_version
 from agentshelf.db import db_session, init_db, quick_check_ok
 from agentshelf.errors import LibraryError
@@ -756,6 +757,17 @@ class Library:
         try:
             restore_backup(self.settings, zip_path)
             self.tokenizer = init_db(self.settings.db_path)
+        finally:
+            self.maintenance = False
+        return {"ok": True, "status": self.status()}
+
+    def replace_synced_storage(self, staging: Path) -> dict:
+        self.maintenance = True
+        try:
+            install_storage_tree(self.settings, staging)
+            self.tokenizer = init_db(self.settings.db_path)
+            self._embedder = None
+            self._status_cache = None
         finally:
             self.maintenance = False
         return {"ok": True, "status": self.status()}

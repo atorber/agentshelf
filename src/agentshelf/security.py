@@ -45,6 +45,12 @@ def _tighten(path: Path) -> None:
     os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
 
 
+def write_private(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    _tighten(path)
+
+
 def _windows_dlls():
     import ctypes
     from ctypes import wintypes

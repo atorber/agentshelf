@@ -116,6 +116,11 @@ agentshelf stop
 | GET/POST/PATCH/DELETE | `/api/projects` `/api/tags` `/api/agents` | 项目、标签、来源 |
 | POST | `/api/backups` | 创建备份 |
 | POST | `/api/backups/{name}/restore` | 从已有备份恢复 |
+| GET/PUT | `/api/cloud` | 读取或保存 S3 配置，响应不含 Secret Key |
+| POST | `/api/cloud/backup` | 创建备份并上传到配置的目录 |
+| PUT | `/api/cloud/sync` | 保存云同步的 Bucket 和根目录 |
+| POST | `/api/cloud/sync` | 按本地目录结构同步到云端，包含数据库 |
+| POST | `/api/cloud/sync/pull` | 用云端目录替换本地存储，令牌和密钥留在本机 |
 | POST | `/api/semantic/import` | 校验并登记本地模型目录 |
 | POST | `/api/semantic/enable` | 开启或关闭语义检索 |
 | POST | `/api/semantic/rebuild` | 重建语义索引 |
@@ -129,6 +134,10 @@ agentshelf stop
 
 备份是一个 zip，内含 `manifest.json`、数据库快照和对象文件。恢复前会做路径检查和完整性检查。恢复失败时会把原来的数据库和文件移回。
 
+设置页可以填写标准 S3，把 zip 备份上传到指定目录。密钥写在数据目录的 `cloud.json`，权限仅当前用户可读，接口不会回传 Secret Key。`agentshelf backup --cloud` 使用已保存的配置上传。
+
+云同步使用同一套访问地址和密钥，另设 Bucket 和根目录，按本机数据目录逐文件镜像，包括 `library.db`。令牌、`cloud.json`、运行状态、日志和暂存不会上传。同步和拉取都是手动操作。
+
 ## 测试
 
 ```bash
@@ -140,7 +149,7 @@ pytest
 
 ## 已知限制与排查
 
-- 首版是单人本地库，没有账号、云同步、远程访问和团队权限。
+- 首版是单人本地库，没有账号、远程访问和团队权限。云端备份上传 zip；云同步按目录镜像存储。两者都要手动执行，不会在后台自动进行。
 - 安装包需要在 macOS 和 Windows 上分别构建。仓库里提供了 Tauri 的 dmg / nsis 配置。
 - 桌面壳优先使用仓库里的 `.venv`。换机器后先执行 `./scripts/dev.sh` 或 `pip install -e .`。
 - 语义检索在没有本地模型和可选依赖时不可用，全文检索不受影响。

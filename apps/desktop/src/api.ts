@@ -1,4 +1,4 @@
-import type { Agent, Artifact, BackupItem, IngestResult, LibraryItem, Preview, Project, Status, Tag } from "./types"
+import type { Agent, Artifact, BackupItem, CloudInput, CloudSettings, IngestResult, LibraryItem, Preview, Project, Status, SyncResult, Tag } from "./types"
 
 interface Session {
   base: string
@@ -164,6 +164,42 @@ export function createBackup() {
 
 export function restoreBackup(name: string) {
   return request<{ ok: boolean }>(`/api/backups/${encodeURIComponent(name)}/restore`, { method: "POST" })
+}
+
+export function getCloud() {
+  return request<CloudSettings>("/api/cloud")
+}
+
+export function saveCloud(body: CloudInput) {
+  return request<CloudSettings>("/api/cloud", { method: "PUT", body: JSON.stringify(body) })
+}
+
+export function testCloud(body: CloudInput) {
+  return request<{ ok: boolean; message: string }>("/api/cloud/test", { method: "POST", body: JSON.stringify(body) })
+}
+
+export function backupToCloud() {
+  return request<BackupItem & { key: string; prefix: string }>("/api/cloud/backup", { method: "POST" })
+}
+
+export function listCloudBackups() {
+  return request<{ items: BackupItem[] }>("/api/cloud/objects")
+}
+
+export function restoreCloudBackup(name: string) {
+  return request<{ ok: boolean }>(`/api/cloud/objects/${encodeURIComponent(name)}/restore`, { method: "POST" })
+}
+
+export function saveSync(body: { bucket: string; prefix: string }) {
+  return request<CloudSettings>("/api/cloud/sync", { method: "PUT", body: JSON.stringify(body) })
+}
+
+export function pushSync() {
+  return request<SyncResult>("/api/cloud/sync", { method: "POST" })
+}
+
+export function pullSync() {
+  return request<{ ok: boolean }>("/api/cloud/sync/pull", { method: "POST" })
 }
 
 export function confirmIngest(payload: {

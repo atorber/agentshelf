@@ -1,7 +1,34 @@
 import { useEffect, useState } from "react"
-import { clearSemantic, createBackup, dataDir, downloadBackup, enableSemantic, importModel, listBackups, openDataDir, rebuildSemantic, restoreBackup, restoreUploadedBackup, status } from "../api"
+import { backupToCloud, clearSemantic, createBackup, dataDir, downloadBackup, enableSemantic, getCloud, importModel, listBackups, listCloudBackups, openDataDir, pullSync, pushSync, rebuildSemantic, restoreBackup, restoreCloudBackup, restoreUploadedBackup, saveCloud, saveSync, status, testCloud } from "../api"
 import { formatBytes, formatTime } from "../format"
-import type { BackupItem, Status } from "../types"
+import type { BackupItem, CloudInput, Status } from "../types"
+
+function cloudPayload(cloud: CloudInput): CloudInput {
+  return {
+    endpoint: cloud.endpoint,
+    region: cloud.region,
+    bucket: cloud.bucket,
+    prefix: cloud.prefix,
+    access_key_id: cloud.access_key_id,
+    secret_access_key: cloud.secret_access_key,
+    path_style: cloud.path_style,
+  }
+}
+
+const EMPTY_CLOUD: CloudInput & { secret_set: boolean; configured: boolean } = {
+  endpoint: "",
+  region: "us-east-1",
+  bucket: "",
+  prefix: "",
+  access_key_id: "",
+  secret_access_key: "",
+  path_style: true,
+  secret_set: false,
+  configured: false,
+  sync_bucket: "",
+  sync_prefix: "",
+  sync_configured: false,
+}
 
 const INSTALL_PROMPT =
   "请从 https://github.com/atorber/agentshelf 安装 Skill agentshelf-archive（目录 skill/agentshelf-archive）。安装到我当前使用的 Agent 的用户级 skills 目录，使所有项目可用。安装完成后告诉我安装位置，并打开 AgentShelf。如果打不开，说明原因，不要声称已经打开。"
@@ -10,6 +37,8 @@ const ARCHIVE_PROMPT = "把这份最终稿归档到 AgentShelf。"
 export function SettingsPage() {
   const [info, setInfo] = useState<Status | null>(null)
   const [backups, setBackups] = useState<BackupItem[]>([])
+  const [cloud, setCloud] = useState(EMPTY_CLOUD)
+  const [remote, setRemote] = useState<BackupItem[]>([])
   const [modelPath, setModelPath] = useState("")
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
@@ -17,10 +46,21 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false)
 
   async function reload() {
-    const [body, backupBody] = await Promise.all([status(), listBackups()])
+    const [body, backupBody, cloudBody] = await Promise.all([status(), listBackups(), getCloud()])
     setInfo(body)
     setBackups(backupBody.items)
+    setCloud({ ...EMPTY_CLOUD, ...cloudBody, secret_access_key: "" })
     setModelPath(body.semantic.model_path || "")
+    if (!cloudBody.configured) {
+      setRemote([])
+      return
+    }
+    try {
+      setRemote((await listCloudBackups()).items)
+    } catch (reason) {
+      setRemote([])
+      setError(reason instanceof Error ? reason.message : "云端目录读取失败")
+    }
   }
 
   useEffect(() => {
@@ -34,11 +74,24 @@ export function SettingsPage() {
     setMessage("")
     setBusy(true)
     try {
-      await action()
+      const result = await action()
       await reload()
-      setMessage(success)
+      setMessage(typeof result === "string" && result ? result : success)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "操作失败")
+    }
+    setBusy(false)
+  }
+
+  async function checkCloud() {
+    setError("")
+    setMessage("")
+    setBusy(true)
+    try {
+      const result = await testCloud(cloudPayload(cloud))
+      setMessage(result.message)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "连接失败")
     }
     setBusy(false)
   }
@@ -59,7 +112,7 @@ export function SettingsPage() {
       <div className="page-head">
         <div>
           <h1>设置</h1>
-          <p>数据、索引和备份都留在本机，不会自动下载模型，也不发送遥测。</p>
+          <p>知识库留在本机。云端备份上传 zip 压缩包。云同步按目录镜像整个存储目录，需要手动执行。不会自动下载模型，也不发送遥测。</p>
         </div>
       </div>
       {message ? <p className="notice">{message}</p> : null}
@@ -205,6 +258,143 @@ export function SettingsPage() {
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-head">
+              <h2>云端备份</h2>
+              <span className={cloud.configured ? "badge current" : "badge"}>{cloud.configured ? "已配置" : "未配置"}</span>
+            </div>
+            <div className="panel-body">
+              <p className="muted small">填写标准 S3。这里的目录只存放 zip 备份包，例如 backups/agentshelf。Secret Key 只写在本机数据目录，保存后不会再显示。按目录镜像存储请用下面的云同步。</p>
+              <div className="form-grid">
+                <label className="field span">
+                  <span>访问地址</span>
+                  <input value={cloud.endpoint} onChange={(event) => setCloud((current) => ({ ...current, endpoint: event.target.value }))} placeholder="留空使用 AWS，或填写 https://s3.example.com" aria-label="访问地址" />
+                </label>
+                <label className="field">
+                  <span>区域</span>
+                  <input value={cloud.region} onChange={(event) => setCloud((current) => ({ ...current, region: event.target.value }))} placeholder="us-east-1" aria-label="区域" />
+                </label>
+                <label className="field">
+                  <span>Bucket</span>
+                  <input value={cloud.bucket} onChange={(event) => setCloud((current) => ({ ...current, bucket: event.target.value }))} placeholder="my-bucket" aria-label="Bucket" />
+                </label>
+                <label className="field span">
+                  <span>目录</span>
+                  <input value={cloud.prefix} onChange={(event) => setCloud((current) => ({ ...current, prefix: event.target.value }))} placeholder="backups/agentshelf" aria-label="目录" />
+                </label>
+                <label className="field">
+                  <span>Access Key</span>
+                  <input value={cloud.access_key_id} onChange={(event) => setCloud((current) => ({ ...current, access_key_id: event.target.value }))} aria-label="Access Key" autoComplete="off" />
+                </label>
+                <label className="field">
+                  <span>Secret Key</span>
+                  <input
+                    type="password"
+                    value={cloud.secret_access_key}
+                    onChange={(event) => setCloud((current) => ({ ...current, secret_access_key: event.target.value }))}
+                    placeholder={cloud.secret_set ? "已保存，留空则不修改" : ""}
+                    aria-label="Secret Key"
+                    autoComplete="new-password"
+                  />
+                </label>
+              </div>
+              <label className="row" style={{ gap: 8 }}>
+                <input type="checkbox" checked={cloud.path_style} onChange={(event) => setCloud((current) => ({ ...current, path_style: event.target.checked }))} />
+                <span>路径风格地址（MinIO 和多数自建 S3 需要）</span>
+              </label>
+              <div className="row">
+                <button className="btn" disabled={busy} onClick={() => run(() => saveCloud(cloudPayload(cloud)), "已保存云端配置")}>
+                  保存
+                </button>
+                <button className="btn" disabled={busy} onClick={() => checkCloud()}>
+                  测试连接
+                </button>
+                <button
+                  className="btn-primary"
+                  disabled={busy || !cloud.configured}
+                  onClick={() =>
+                    run(async () => {
+                      const item = await backupToCloud()
+                      return `已上传到 ${item.prefix}${item.name}`
+                    }, "")
+                  }
+                >
+                  备份到云端
+                </button>
+              </div>
+              {remote.length === 0 ? <p className="muted small">云端目录里还没有备份。备份到云端时也会在本机留一份。</p> : null}
+              {remote.map((item) => (
+                <div className="list-row" key={item.name} style={{ paddingLeft: 0, paddingRight: 0 }}>
+                  <div className="grow">
+                    <div className="item-title">
+                      <span>{item.name}</span>
+                    </div>
+                    <div className="item-sub">
+                      {formatBytes(item.size_bytes)} · {formatTime(item.created_at)}
+                    </div>
+                  </div>
+                  <button
+                    className="btn-text danger"
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm("用这份云端备份替换当前知识库？")) run(() => restoreCloudBackup(item.name), "已从云端恢复")
+                    }}
+                  >
+                    恢复
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-head">
+              <h2>云同步</h2>
+              <span className={cloud.sync_configured ? "badge current" : "badge"}>{cloud.sync_configured ? "已配置" : "未配置"}</span>
+            </div>
+            <div className="panel-body">
+              <p className="muted small">指定一个 Bucket，再指定一个目录作为云同步根目录。同步会按本机数据目录的结构上传 library.db、文件、本地备份和模型。令牌、S3 密钥、运行状态、日志和暂存不会上传。访问地址、区域和密钥使用上面已保存的连接。</p>
+              <div className="form-grid">
+                <label className="field">
+                  <span>同步 Bucket</span>
+                  <input value={cloud.sync_bucket} onChange={(event) => setCloud((current) => ({ ...current, sync_bucket: event.target.value }))} placeholder="sync-bucket" aria-label="同步 Bucket" />
+                </label>
+                <label className="field">
+                  <span>同步目录</span>
+                  <input value={cloud.sync_prefix} onChange={(event) => setCloud((current) => ({ ...current, sync_prefix: event.target.value }))} placeholder="agentshelf" aria-label="同步目录" />
+                </label>
+              </div>
+              <div className="row">
+                <button className="btn" disabled={busy} onClick={() => run(() => saveSync({ bucket: cloud.sync_bucket, prefix: cloud.sync_prefix }), "已保存云同步目录")}>
+                  保存同步目录
+                </button>
+                <button
+                  className="btn-primary"
+                  disabled={busy || !cloud.sync_configured}
+                  onClick={() => {
+                    if (!window.confirm("按本地存储目录覆盖云端目录，云端多余文件会被删除。继续？")) return
+                    run(async () => {
+                      const item = await pushSync()
+                      return `已同步 ${item.files} 个文件，上传 ${item.uploaded}，删除云端多余 ${item.deleted}`
+                    }, "")
+                  }}
+                >
+                  同步到云端
+                </button>
+                <button
+                  className="btn"
+                  disabled={busy || !cloud.sync_configured}
+                  onClick={() => {
+                    if (!window.confirm("从云端拉取会用云端目录替换本地数据库、文件、备份和模型。令牌和 S3 配置留在本机。继续？")) return
+                    run(() => pullSync(), "已从云端拉取")
+                  }}
+                >
+                  从云端拉取
+                </button>
+              </div>
             </div>
           </div>
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -13,6 +14,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from agentshelf.cloud import (
+    backup_to_cloud,
+    download_cloud_backup,
+    download_storage,
+    list_cloud_backups,
+    load_config,
+    push_storage,
+    save_config,
+    save_sync,
+    test_connection,
+)
 from agentshelf.config import Settings, app_version, load_settings
 from agentshelf.errors import LibraryError
 from agentshelf.library import Library
@@ -283,6 +295,57 @@ def create_app(settings: Settings | None = None, *, testing: bool = False, embed
         path = library.backup_path(name)
         return _restore(path)
 
+    @app.get("/api/cloud", dependencies=[Depends(require_token)])
+    def get_cloud():
+        return load_config(resolved).public()
+
+    @app.put("/api/cloud", dependencies=[Depends(require_token)])
+    def put_cloud(body: CloudIn):
+        return save_config(resolved, body.model_dump()).public()
+
+    @app.post("/api/cloud/test", dependencies=[Depends(require_token)])
+    def check_cloud(body: CloudIn):
+        return test_connection(resolved, body.model_dump())
+
+    @app.post("/api/cloud/backup", dependencies=[Depends(require_token)])
+    def cloud_backup():
+        return backup_to_cloud(resolved)
+
+    @app.get("/api/cloud/objects", dependencies=[Depends(require_token)])
+    def cloud_objects():
+        return {"items": list_cloud_backups(resolved)}
+
+    @app.post("/api/cloud/objects/{name}/restore", dependencies=[Depends(require_token)])
+    def restore_cloud(name: str):
+        path = download_cloud_backup(resolved, name)
+        try:
+            return _restore(path)
+        finally:
+            path.unlink(missing_ok=True)
+
+    @app.put("/api/cloud/sync", dependencies=[Depends(require_token)])
+    def put_sync(body: SyncIn):
+        return save_sync(resolved, body.model_dump()).public()
+
+    @app.post("/api/cloud/sync", dependencies=[Depends(require_token)])
+    def push_cloud():
+        library.require_available()
+        return push_storage(resolved)
+
+    @app.post("/api/cloud/sync/pull", dependencies=[Depends(require_token)])
+    def pull_cloud():
+        library.require_available()
+        worker.stop()
+        staging = None
+        try:
+            staging = download_storage(resolved)
+            return library.replace_synced_storage(staging)
+        finally:
+            if staging is not None:
+                shutil.rmtree(staging, ignore_errors=True)
+            if not resolved.sync_index:
+                worker.start()
+
     @app.post("/api/backups/upload-restore", dependencies=[Depends(require_token)])
     async def restore_upload(file: UploadFile = File(...)):
         safe_filename(file.filename or "backup.zip")
@@ -376,6 +439,21 @@ class PathIn(BaseModel):
 
 class EnableIn(BaseModel):
     enabled: bool
+
+
+class CloudIn(BaseModel):
+    endpoint: str = ""
+    region: str = "us-east-1"
+    bucket: str = ""
+    prefix: str = ""
+    access_key_id: str = ""
+    secret_access_key: str = ""
+    path_style: bool = True
+
+
+class SyncIn(BaseModel):
+    bucket: str = ""
+    prefix: str = ""
 
 
 def _outcome(result: dict) -> JSONResponse:

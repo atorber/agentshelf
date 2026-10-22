@@ -300,6 +300,196 @@ def test_backup_and_restore_roundtrip(client):
     assert downloaded.content == b"please-restore-me"
 
 
+def test_s3_signature_matches_the_aws_example():
+    from agentshelf.s3 import aws_example_signature
+
+    signed = aws_example_signature()
+    assert signed.endswith("Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41")
+
+
+def test_cloud_settings_stay_on_this_machine(client, data_dir):
+    import json
+
+    from agentshelf.security import is_user_only
+
+    payload = {
+        "endpoint": "https://s3.example.com",
+        "region": "us-east-1",
+        "bucket": "shelf-bucket",
+        "prefix": "/backups/agentshelf",
+        "access_key_id": "AKIAEXAMPLE",
+        "secret_access_key": "super-secret",
+        "path_style": True,
+    }
+    saved = client.put("/api/cloud", json=payload)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["prefix"] == "backups/agentshelf/"
+    assert saved.json()["secret_set"] is True
+    assert "super-secret" not in saved.text
+    assert is_user_only(data_dir / "cloud.json")
+    kept = client.put("/api/cloud", json={**payload, "secret_access_key": ""})
+    assert kept.status_code == 200, kept.text
+    assert json.loads((data_dir / "cloud.json").read_text(encoding="utf-8"))["secret_access_key"] == "super-secret"
+    rejected = client.put("/api/cloud", json={**payload, "prefix": "../etc"})
+    assert rejected.status_code == 400
+
+
+def test_cloud_backup_uploads_into_the_configured_directory(client, monkeypatch):
+    import httpx
+
+    import agentshelf.cloud as cloud
+    from agentshelf.s3 import S3Client
+
+    uploaded: dict[str, bytes] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("list-type"):
+            name = uploaded["path"].rsplit("/", 1)[-1]
+            xml = f"""<?xml version="1.0"?>
+            <ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+              <IsTruncated>false</IsTruncated>
+              <Contents><Key>backups/agentshelf/{name}</Key><Size>{len(uploaded["body"])}</Size><LastModified>2026-10-22T12:00:00.000Z</LastModified></Contents>
+              <Contents><Key>backups/agentshelf/notes.txt</Key><Size>1</Size><LastModified>2026-10-22T12:00:00.000Z</LastModified></Contents>
+            </ListBucketResult>"""
+            return httpx.Response(200, content=xml.encode())
+        if request.method == "GET":
+            return httpx.Response(200, content=uploaded["body"])
+        uploaded["path"] = request.url.path
+        uploaded["body"] = request.read()
+        assert request.headers["authorization"].startswith("AWS4-HMAC-SHA256")
+        return httpx.Response(200)
+
+    def client_with_transport(config, transport=None):
+        return S3Client(
+            endpoint=config.endpoint,
+            region=config.region,
+            bucket=config.bucket,
+            access_key_id=config.access_key_id,
+            secret_access_key=config.secret_access_key,
+            path_style=config.path_style,
+            transport=httpx.MockTransport(handler),
+        )
+
+    monkeypatch.setattr(cloud, "_client", client_with_transport)
+    payload = {
+        "endpoint": "https://s3.example.com",
+        "region": "us-east-1",
+        "bucket": "shelf-bucket",
+        "prefix": "backups/agentshelf",
+        "access_key_id": "AKIAEXAMPLE",
+        "secret_access_key": "super-secret",
+        "path_style": True,
+    }
+    assert client.put("/api/cloud", json=payload).status_code == 200
+    created = upload(client, "cloud.txt", b"cloud-body", title="云端那条")
+    artifact_id = created.json()["id"]
+    backed = client.post("/api/cloud/backup")
+    assert backed.status_code == 200, backed.text
+    assert uploaded["path"] == f"/shelf-bucket/backups/agentshelf/{backed.json()['name']}"
+    listed = client.get("/api/cloud/objects")
+    assert listed.status_code == 200
+    assert [item["name"] for item in listed.json()["items"]] == [backed.json()["name"]]
+    assert client.delete(f"/api/artifacts/{artifact_id}").status_code == 200
+    restored = client.post(f"/api/cloud/objects/{backed.json()['name']}/restore")
+    assert restored.status_code == 200, restored.text
+    assert client.get(f"/api/artifacts/{artifact_id}/download").content == b"cloud-body"
+
+
+def test_cloud_sync_mirrors_the_storage_directory(client, data_dir, monkeypatch):
+    import hashlib
+
+    import httpx
+
+    import agentshelf.cloud as cloud
+    from agentshelf.s3 import S3Client
+
+    store: dict[str, bytes] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("list-type"):
+            prefix = request.url.params.get("prefix", "")
+            rows = []
+            for key, body in store.items():
+                if key.startswith(prefix):
+                    etag = hashlib.md5(body).hexdigest()
+                    rows.append(f"<Contents><Key>{key}</Key><Size>{len(body)}</Size><ETag>\"{etag}\"</ETag></Contents>")
+            xml = f"<?xml version=\"1.0\"?><ListBucketResult><IsTruncated>false</IsTruncated>{''.join(rows)}</ListBucketResult>"
+            return httpx.Response(200, content=xml.encode())
+        key = request.url.path.lstrip("/").split("/", 1)[1]
+        if request.method == "PUT":
+            store[key] = request.read()
+            return httpx.Response(200)
+        if request.method == "DELETE":
+            store.pop(key, None)
+            return httpx.Response(204)
+        if request.method == "GET":
+            body = store.get(key)
+            return httpx.Response(200 if body is not None else 404, content=body or b"")
+        return httpx.Response(400)
+
+    def client_with_transport(config, transport=None, bucket=None):
+        return S3Client(
+            endpoint=config.endpoint,
+            region=config.region,
+            bucket=bucket or config.bucket,
+            access_key_id=config.access_key_id,
+            secret_access_key=config.secret_access_key,
+            path_style=config.path_style,
+            transport=httpx.MockTransport(handler),
+        )
+
+    monkeypatch.setattr(cloud, "_client", client_with_transport)
+    assert client.put("/api/cloud/sync", json={"bucket": "sync-bucket", "prefix": "agentshelf"}).status_code == 400
+    payload = {
+        "endpoint": "https://s3.example.com",
+        "region": "us-east-1",
+        "bucket": "shelf-bucket",
+        "prefix": "backups/agentshelf",
+        "access_key_id": "AKIAEXAMPLE",
+        "secret_access_key": "super-secret",
+        "path_style": True,
+    }
+    assert client.put("/api/cloud", json=payload).status_code == 200
+    assert client.put("/api/cloud/sync", json={"bucket": "sync-bucket", "prefix": ""}).status_code == 400
+    saved = client.put("/api/cloud/sync", json={"bucket": "sync-bucket", "prefix": "agentshelf"})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["sync_prefix"] == "agentshelf/"
+    assert saved.json()["sync_configured"] is True
+    assert "super-secret" not in saved.text
+    kept = client.put("/api/cloud", json={**payload, "prefix": "backups/other", "secret_access_key": ""})
+    assert kept.status_code == 200, kept.text
+    assert kept.json()["prefix"] == "backups/other/"
+    assert kept.json()["sync_bucket"] == "sync-bucket"
+    assert kept.json()["sync_prefix"] == "agentshelf/"
+
+    created = upload(client, "synced.txt", b"sync-body", title="同步那条")
+    artifact_id = created.json()["id"]
+    marker = data_dir / "models" / "marker.bin"
+    marker.write_bytes(b"marker")
+    pushed = client.post("/api/cloud/sync")
+    assert pushed.status_code == 200, pushed.text
+    assert pushed.json()["uploaded"] == pushed.json()["files"]
+    assert pushed.json()["deleted"] == 0
+    assert "agentshelf/library.db" in store
+    assert "agentshelf/models/marker.bin" in store
+    assert any(key.startswith("agentshelf/objects/") for key in store)
+    assert "agentshelf/token" not in store
+    assert "agentshelf/cloud.json" not in store
+    again = client.post("/api/cloud/sync")
+    assert again.status_code == 200, again.text
+    assert again.json()["uploaded"] == 0
+    assert again.json()["deleted"] == 0
+    assert client.delete(f"/api/artifacts/{artifact_id}").status_code == 200
+    pulled = client.post("/api/cloud/sync/pull")
+    assert pulled.status_code == 200, pulled.text
+    assert client.get(f"/api/artifacts/{artifact_id}/download").content == b"sync-body"
+    marker.unlink()
+    removed = client.post("/api/cloud/sync")
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["deleted"] == 1
+    assert "agentshelf/models/marker.bin" not in store
+
+
 def test_rejects_path_traversal_in_backup(client, tmp_path):
     blob = io.BytesIO()
     with zipfile.ZipFile(blob, "w") as archive:
