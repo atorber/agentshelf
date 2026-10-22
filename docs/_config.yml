@@ -1,0 +1,17 @@
+title: AgentShelf
+description: 面向多个 AI Agent 的本地最终产物库
+lang: zh-CN
+
+relative_links:
+  enabled: true
+  collections: false
+
+optional_front_matter:
+  enabled: true
+
+readme_index:
+  enabled: true
+
+titles_from_headings:
+  enabled: true
+  strip_title: false

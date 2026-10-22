@@ -1,6 +1,8 @@
 # 命令行与 Skill
 
-命令行和 Skill 都访问已经启动的本地服务。服务没启动时，先按 [快速开始](quickstart.md) 打开界面，或执行 `agentshelf serve`。
+命令行和 Skill 是各 Agent 接入本机产物库的方式。它们访问已经启动的本地服务，不自己保存版本，也不直接改数据库。服务没启动时，先按 [快速开始](quickstart.md) 打开界面，或执行 `agentshelf serve`。
+
+只归档最终成果。过程稿、执行日志、思考记录和中间文件不提交。拿不准时先问你。Claude Code、Cursor、Codex 以及其他支持 Skill 的 Agent 使用同一份 `agentshelf-archive`。
 
 命令通过本机令牌访问 `127.0.0.1`。令牌写在数据目录的 `token` 文件里，只有当前用户可以读。不要把令牌抄到仓库或发给别人。
 
