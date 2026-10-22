@@ -1,0 +1,112 @@
+.hero {
+  padding: 0.4rem 0 0.2rem;
+}
+
+.lead {
+  max-width: 42rem;
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.6;
+  color: var(--ifm-font-color-secondary);
+}
+
+.meta {
+  margin: 0.8rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.4rem;
+}
+
+.actions :global(.button--secondary) {
+  color: var(--ifm-font-color-base);
+  background: var(--ifm-background-surface-color);
+  border-color: var(--ifm-toc-border-color);
+}
+
+.actions :global(.button) {
+  border-radius: 6px;
+}
+
+.section {
+  padding-top: 2.6rem;
+}
+
+.section h2 {
+  margin-bottom: 0.8rem;
+  letter-spacing: -0.02em;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-height: 100%;
+  padding: 16px;
+  border: 1px solid var(--ifm-toc-border-color);
+  border-radius: 8px;
+  background: var(--ifm-background-surface-color);
+  color: inherit;
+}
+
+.card:hover {
+  text-decoration: none;
+  border-color: var(--ifm-color-primary);
+  color: inherit;
+}
+
+.step {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--ifm-color-primary);
+}
+
+.card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.card p {
+  margin: 0;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.92rem;
+}
+
+.more {
+  margin-top: auto;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.prompt {
+  margin: 0.8rem 0 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--ifm-code-background);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.86rem;
+}
+
+@media (max-width: 996px) {
+  .grid,
+  .split {
+    grid-template-columns: 1fr;
+  }
+}

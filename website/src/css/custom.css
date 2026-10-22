@@ -1,0 +1,56 @@
+:root {
+  --ifm-color-primary: #1d6b4a;
+  --ifm-color-primary-dark: #185c40;
+  --ifm-color-primary-darker: #16563c;
+  --ifm-color-primary-darkest: #124732;
+  --ifm-color-primary-light: #217a55;
+  --ifm-color-primary-lighter: #24845b;
+  --ifm-color-primary-lightest: #2f9a6c;
+  --ifm-font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --ifm-font-family-monospace: "SFMono-Regular", "SF Mono", "Cascadia Code", ui-monospace, monospace;
+  --ifm-background-color: #f5f4f1;
+  --ifm-navbar-background-color: #f7f6f3;
+  --ifm-footer-background-color: #1f1d1a;
+  --ifm-code-font-size: 92%;
+  --ifm-global-radius: 8px;
+  --ifm-heading-font-weight: 650;
+  --ifm-navbar-shadow: none;
+  --ifm-toc-border-color: #e5e2dc;
+  --docusaurus-highlighted-code-line-bg: rgba(29, 107, 74, 0.08);
+}
+
+[data-theme="dark"] {
+  --ifm-color-primary: #8fbfa4;
+  --ifm-color-primary-dark: #7db394;
+  --ifm-color-primary-darker: #74ad8c;
+  --ifm-color-primary-darkest: #5d9474;
+  --ifm-color-primary-light: #a1cbb4;
+  --ifm-color-primary-lighter: #aad1bc;
+  --ifm-color-primary-lightest: #c5e2d4;
+  --ifm-background-color: #161513;
+  --ifm-navbar-background-color: #1c1b19;
+  --ifm-footer-background-color: #100f0e;
+  --ifm-toc-border-color: #34322e;
+  --docusaurus-highlighted-code-line-bg: rgba(143, 191, 164, 0.12);
+}
+
+.navbar {
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+
+.navbar__title {
+  font-weight: 650;
+}
+
+.footer--dark {
+  --ifm-footer-background-color: #1f1d1a;
+}
+
+.markdown > h1,
+.markdown > h2 {
+  letter-spacing: -0.02em;
+}
+
+.theme-admonition {
+  border-radius: 8px;
+}

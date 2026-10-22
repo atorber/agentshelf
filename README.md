@@ -2,7 +2,7 @@
 
 AgentShelf 是面向多个 AI Agent 的本地最终产物库。Claude Code、Cursor、Codex 以及其他支持 Skill 的 Agent，通过同一个归档 Skill 把最终成果交到本机，在这里检索、预览、保留版本和备份。正常使用不需要互联网，也不会把文件、检索词或使用记录发到外部服务。思考过程、执行日志和中间文件不进入产物库。
 
-产品介绍、快速开始和使用说明：<https://atorber.github.io/agentshelf/>（源文件在 [docs](docs/index.md)）。
+产品介绍、快速开始和使用说明：<https://atorber.github.io/agentshelf/>（源文件在 [website](website/docs/index.mdx)）。
 
 ## 技术方案
 

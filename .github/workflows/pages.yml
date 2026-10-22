@@ -20,16 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
-      - name: Install MkDocs Material
-        run: pip install -r requirements-docs.txt
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install docs dependencies
+        working-directory: website
+        run: npm ci
       - name: Build the docs site
-        run: mkdocs build --strict
+        working-directory: website
+        run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: website/build
 
   deploy:
     needs: build
