@@ -1,18 +1,22 @@
 import { useEffect, useState } from "react"
-import { NavLink, Outlet } from "react-router-dom"
+import { NavLink, Outlet, useLocation } from "react-router-dom"
 import { status } from "../api"
+import { libraryPath } from "../format"
 import type { Status } from "../types"
+import { Icon } from "./Icon"
 
 const links = [
-  ["/", "产物库"],
-  ["/upload", "上传"],
-  ["/organize", "整理"],
-  ["/settings", "设置"],
+  ["/", "产物库", "library"],
+  ["/upload", "上传", "upload"],
+  ["/organize", "整理", "organize"],
+  ["/settings", "设置", "settings"],
 ]
 
 export function Layout() {
   const [info, setInfo] = useState<Status | null>(null)
   const [offline, setOffline] = useState(false)
+  const location = useLocation()
+  const inLibrary = location.pathname === "/" || location.pathname.startsWith("/artifacts/")
 
   useEffect(() => {
     let stop = false
@@ -41,21 +45,19 @@ export function Layout() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
-            <svg width="22" height="22" viewBox="0 0 32 32">
+            <svg width="18" height="18" viewBox="0 0 32 32">
               <rect x="6" y="18" width="20" height="3" rx="1" fill="#f6f1e8" />
               <rect x="8" y="9" width="5" height="9" rx="1" fill="#f3de9a" />
               <rect x="14" y="11" width="5" height="7" rx="1" fill="#f6f1e8" />
               <rect x="20" y="8" width="4" height="10" rx="1" fill="#e7c3b4" />
             </svg>
           </div>
-          <div>
-            <strong>AgentShelf</strong>
-            <span>本地产物库</span>
-          </div>
+          <strong>AgentShelf</strong>
         </div>
         <nav className="nav">
-          {links.map(([to, label]) => (
-            <NavLink key={to} to={to} end={to === "/"}>
+          {links.map(([to, label, icon]) => (
+            <NavLink key={to} to={to === "/" ? libraryPath() : to} end={to === "/"} className={({ isActive }) => ((to === "/" ? inLibrary : isActive) ? "active" : "")}>
+              <Icon name={icon} />
               {label}
             </NavLink>
           ))}
@@ -63,9 +65,9 @@ export function Layout() {
         <div className="side-status">
           <div>
             <span className={offline || info?.db_ok === false ? "dot warn" : "dot"} />
-            {offline ? "服务未响应" : info?.db_ok === false ? "数据库异常" : "服务运行中"}
+            {offline ? "服务未响应" : info?.db_ok === false ? "数据库异常" : info ? "服务运行中" : "正在连接"}
           </div>
-          <div>{info ? `${info.storage.artifact_count} 个产物` : "正在读取状态"}</div>
+          {info ? <div className="faint">{info.storage.artifact_count} 个产物 · v{info.version}</div> : null}
         </div>
       </aside>
       <main className="main">

@@ -17,6 +17,28 @@ export function formatTime(value?: string): string {
   return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date)
 }
 
+const LIBRARY_KEY = "agentshelf.library.search"
+
+export function rememberLibrary(search: string) {
+  try {
+    window.sessionStorage.setItem(LIBRARY_KEY, search)
+  } catch {
+    return
+  }
+}
+
+export function libraryPath(): string {
+  try {
+    return `/${window.sessionStorage.getItem(LIBRARY_KEY) || ""}`
+  } catch {
+    return "/"
+  }
+}
+
+export function fileSummary(count: number, filename: string): string {
+  return count > 1 ? `${count} 个文件` : filename
+}
+
 export const kindLabel: Record<string, string> = {
   markdown: "Markdown",
   text: "文本",

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { deleteArtifact, downloadArtifact, getArtifact, restoreVersion, updateArtifact, verify } from "../api"
+import { Icon } from "../components/Icon"
 import { PreviewPane } from "../components/PreviewPane"
-import { formatBytes, formatTime, kindLabel } from "../format"
+import { fileSummary, formatBytes, formatTime, kindLabel, libraryPath } from "../format"
 import type { Artifact, ArtifactFile, Version } from "../types"
 
 function listedFiles(version: Version): ArtifactFile[] {
@@ -32,9 +33,11 @@ export function DetailPage() {
   const { id = "" } = useParams()
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const [artifact, setArtifact] = useState<Artifact | null>(null)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
+  const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [project, setProject] = useState("")
@@ -44,15 +47,19 @@ export function DetailPage() {
   const versionId = params.get("version") || undefined
   const fileId = params.get("file") || undefined
 
+  function fillForm(body: Artifact) {
+    setTitle(body.title)
+    setDescription(body.description)
+    setProject(body.project?.name || "")
+    setTags(body.tags.join(", "))
+    setSource(body.source_agent?.name || "")
+  }
+
   function load(nextId = id) {
     return getArtifact(nextId)
       .then((body) => {
         setArtifact(body)
-        setTitle(body.title)
-        setDescription(body.description)
-        setProject(body.project?.name || "")
-        setTags(body.tags.join(", "))
-        setSource(body.source_agent?.name || "")
+        fillForm(body)
         setError("")
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "读取失败"))
@@ -62,20 +69,48 @@ export function DetailPage() {
     setArtifact(null)
     setError("")
     setNotice("")
+    setEditing(false)
     load()
   }, [id])
 
   const selected = artifact?.versions.find((item) => item.id === versionId) || artifact?.current_version
   const files = selected ? listedFiles(selected) : []
+  const multiple = files.length > 1
   const opened = files.find((file) => file.id && file.id === fileId)
-  const showList = files.length > 1 && !opened
+  const showList = multiple && !opened
   const shown = opened || (files.length === 1 ? files[0] : undefined)
+
+  function versionParams() {
+    const next = new URLSearchParams()
+    if (versionId) next.set("version", versionId)
+    return next
+  }
+
+  function openFile(file: ArtifactFile) {
+    const next = versionParams()
+    if (file.id) next.set("file", file.id)
+    if (opened) setParams(next, { replace: true, state: location.state })
+    else setParams(next, { state: { fromList: true } })
+  }
+
+  function backToFiles() {
+    if ((location.state as { fromList?: boolean } | null)?.fromList) navigate(-1)
+    else setParams(versionParams(), { replace: true })
+  }
+
+  function goUp() {
+    if (multiple && opened) backToFiles()
+    else navigate(libraryPath())
+  }
 
   async function save() {
     try {
       const body = await updateArtifact(id, { title, description, project, tags, source_agent: source })
       setArtifact(body)
+      fillForm(body)
+      setEditing(false)
       setNotice("已保存")
+      setError("")
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "保存失败")
     }
@@ -91,19 +126,6 @@ export function DetailPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "恢复失败")
     }
-  }
-
-  function openFile(file: ArtifactFile) {
-    const next = new URLSearchParams()
-    if (versionId) next.set("version", versionId)
-    if (file.id) next.set("file", file.id)
-    setParams(next)
-  }
-
-  function backToFiles() {
-    const next = new URLSearchParams()
-    if (versionId) next.set("version", versionId)
-    setParams(next)
   }
 
   async function download() {
@@ -127,121 +149,267 @@ export function DetailPage() {
 
   async function remove() {
     if (!window.confirm("删除后无法从产物库恢复，确定删除？")) return
-    await deleteArtifact(id)
-    navigate("/")
+    try {
+      await deleteArtifact(id)
+      navigate(libraryPath())
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "删除失败")
+    }
   }
 
-  if (error && !artifact) return <p className="error">{error}</p>
-  if (!artifact || !selected) return <p className="muted">正在读取产物…</p>
+  if (error && !artifact) {
+    return (
+      <section className="page">
+        <div className="crumbs">
+          <Link to={libraryPath()}>产物库</Link>
+        </div>
+        <p className="error">{error}</p>
+      </section>
+    )
+  }
+  if (!artifact || !selected) {
+    return (
+      <section className="page">
+        <div className="crumbs">
+          <Link to={libraryPath()}>产物库</Link>
+        </div>
+        <div className="panel empty">正在读取产物…</div>
+      </section>
+    )
+  }
+
+  const isOld = !selected.is_current
+  const extractTarget = shown || selected
 
   return (
-    <section>
-      <div className="page-head">
-        <div>
-          <Link to="/">返回产物库</Link>
-          <h1>{artifact.title}</h1>
-          <p>
-            {showList || !shown
-              ? `${files.length} 个文件`
-              : `${kindLabel[shown.preview_kind] || shown.preview_kind} · ${shown.filename} · ${formatBytes(shown.size_bytes)}`}
-          </p>
-        </div>
-        <div className="actions">
-          {shown ? (
+    <section className="page">
+      <div className="stack" style={{ gap: 6 }}>
+        <nav className="crumbs" aria-label="位置">
+          <Link to={libraryPath()}>产物库</Link>
+          <span className="sep">/</span>
+          {multiple && opened ? (
+            <button onClick={backToFiles}>{artifact.title}</button>
+          ) : (
+            <span className={isOld ? "" : "here"}>{artifact.title}</span>
+          )}
+          {isOld ? (
             <>
-              <button className="btn-ghost" onClick={download}>
-                下载
-              </button>
-              <button className="btn-ghost" onClick={check}>
-                校验
-              </button>
+              <span className="sep">/</span>
+              <span className={multiple && opened ? "" : "here"}>v{selected.version_number}</span>
             </>
           ) : null}
-          <button className="btn-danger" onClick={remove}>
-            删除
-          </button>
+          {multiple && opened ? (
+            <>
+              <span className="sep">/</span>
+              <span className="here">{opened.filename}</span>
+            </>
+          ) : null}
+        </nav>
+        <div className="page-head">
+          <div className="title-row">
+            <button className="btn-ghost icon-btn" onClick={goUp} title={multiple && opened ? "返回文件列表" : "返回产物库"} aria-label={multiple && opened ? "返回文件列表" : "返回产物库"}>
+              <Icon name="back" />
+            </button>
+            <h1>{artifact.title}</h1>
+            {isOld ? <span className="badge">历史版本 v{selected.version_number}</span> : null}
+          </div>
+          <div className="actions">
+            {shown ? (
+              <>
+                <button className="btn" onClick={check}>
+                  <Icon name="check" />
+                  校验
+                </button>
+                <button className="btn" onClick={download}>
+                  <Icon name="download" />
+                  下载
+                </button>
+              </>
+            ) : null}
+          </div>
         </div>
       </div>
       {error ? <p className="error">{error}</p> : null}
       {notice ? <p className="notice">{notice}</p> : null}
       <div className="detail">
-        {showList ? (
-          <div className="panel">
-            <strong>文件</strong>
-            {files.map((file) => (
-              <div className="version" key={file.id || file.sha256}>
-                <div>
-                  <button className="btn-ghost" onClick={() => openFile(file)}>
-                    {file.filename}
-                  </button>
-                  <div className="muted">
-                    {kindLabel[file.preview_kind] || file.preview_kind} · {formatBytes(file.size_bytes)}
-                  </div>
-                </div>
+        <div className="panel viewer">
+          {showList ? (
+            <>
+              <div className="panel-head">
+                <h2>文件</h2>
+                <span className="muted small">{files.length} 个 · 点击预览</span>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="stack">
-            {files.length > 1 ? (
-              <button className="btn-ghost" onClick={backToFiles}>
-                返回文件列表
-              </button>
-            ) : null}
-            <PreviewPane artifactId={id} versionId={selected.id} fileId={shown?.id || undefined} />
-          </div>
-        )}
-        <div className="stack">
-          <div className="panel stack">
-            <label className="field">
-              <span>名称</span>
-              <input value={title} onChange={(event) => setTitle(event.target.value)} />
-            </label>
-            <label className="field">
-              <span>描述</span>
-              <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
-            </label>
-            <label className="field">
-              <span>项目</span>
-              <input value={project} onChange={(event) => setProject(event.target.value)} />
-            </label>
-            <label className="field">
-              <span>标签</span>
-              <input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="用逗号分隔" />
-            </label>
-            <label className="field">
-              <span>来源 Agent</span>
-              <input value={source} onChange={(event) => setSource(event.target.value)} />
-            </label>
-            <button className="btn-primary" onClick={save}>
-              保存信息
-            </button>
-            {shown ? <div className="hash">SHA-256 {shown.sha256}</div> : <div className="muted">打开文件后可以下载和校验。</div>}
-            {(shown || selected).extract_status === "pending" ? <div className="muted">正在建立索引…</div> : null}
-            {(shown || selected).extract_error ? <div className="error">{(shown || selected).extract_error}</div> : null}
-          </div>
-          <div className="panel">
-            <strong>版本</strong>
-            {artifact.versions.map((version) => (
-              <div className="version" key={version.id}>
-                <div>
-                  <button className="btn-ghost" onClick={() => setParams(version.is_current ? {} : { version: version.id })}>
-                    v{version.version_number} {version.is_current ? "当前" : ""}
+              <div className="files">
+                {files.map((file) => (
+                  <button
+                    className="item"
+                    key={file.id || file.sha256}
+                    onClick={() => openFile(file)}
+                  >
+                    <span className={`kind kind-${file.preview_kind}`}>{kindLabel[file.preview_kind] || file.preview_kind}</span>
+                    <span className="item-title">
+                      <span>{file.filename}</span>
+                    </span>
+                    <span className="item-meta">{formatBytes(file.size_bytes)}</span>
                   </button>
-                  <div className="muted">
-                    {formatTime(version.created_at)} · {(version.file_count || version.files?.length || 1) > 1 ? `${version.file_count || version.files.length} 个文件` : version.filename}
-                    {version.note ? ` · ${version.note}` : ""}
-                  </div>
-                </div>
-                {artifact.current_version && fileSignature(version) !== fileSignature(artifact.current_version) ? (
-                  <button className="btn-ghost" onClick={() => restore(version.id)}>
-                    恢复
-                  </button>
-                ) : null}
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <>
+              {multiple ? (
+                <div className="file-tabs" role="tablist">
+                  {files.map((file) => (
+                    <button key={file.id || file.sha256} role="tab" aria-selected={file.id === shown?.id} className={file.id === shown?.id ? "active" : ""} onClick={() => openFile(file)}>
+                      {file.filename}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <PreviewPane artifactId={id} versionId={selected.id} fileId={shown?.id || undefined} />
+              {shown ? (
+                <div className="viewer-foot">
+                  <span className="muted small">
+                    {kindLabel[shown.preview_kind] || shown.preview_kind} · {shown.filename} · {formatBytes(shown.size_bytes)}
+                  </span>
+                  <span className="hash" title="SHA-256">
+                    {shown.sha256.slice(0, 16)}…
+                  </span>
+                </div>
+              ) : null}
+            </>
+          )}
+          {extractTarget.extract_status === "pending" ? <div className="viewer-foot muted small">正在建立索引…</div> : null}
+          {extractTarget.extract_error ? <div className="viewer-foot error small">{extractTarget.extract_error}</div> : null}
         </div>
+        <aside>
+          <div className="panel">
+            <div className="panel-head">
+              <h2>信息</h2>
+              {editing ? null : (
+                <button className="btn-text" onClick={() => setEditing(true)}>
+                  编辑
+                </button>
+              )}
+            </div>
+            <div className="panel-body">
+              {editing ? (
+                <>
+                  <label className="field">
+                    <span>名称</span>
+                    <input value={title} onChange={(event) => setTitle(event.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span>描述</span>
+                    <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span>项目</span>
+                    <input value={project} onChange={(event) => setProject(event.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span>标签</span>
+                    <input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="用逗号分隔" />
+                  </label>
+                  <label className="field">
+                    <span>来源 Agent</span>
+                    <input value={source} onChange={(event) => setSource(event.target.value)} />
+                  </label>
+                  <div className="row" style={{ justifyContent: "flex-end" }}>
+                    <button
+                      className="btn-ghost"
+                      onClick={() => {
+                        fillForm(artifact)
+                        setEditing(false)
+                      }}
+                    >
+                      取消
+                    </button>
+                    <button className="btn-primary" onClick={save} disabled={!title.trim()}>
+                      保存
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <dl className="props">
+                  <dt>项目</dt>
+                  <dd>{artifact.project?.name || <span className="faint">未分组</span>}</dd>
+                  <dt>标签</dt>
+                  <dd>
+                    {artifact.tags.length ? (
+                      <span className="tags">
+                        {artifact.tags.map((name) => (
+                          <span className="tag" key={name}>
+                            {name}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="faint">无</span>
+                    )}
+                  </dd>
+                  <dt>来源</dt>
+                  <dd>{artifact.source_agent?.name || <span className="faint">未知</span>}</dd>
+                  <dt>文件</dt>
+                  <dd>{fileSummary(files.length, files[0]?.filename || "")}</dd>
+                  <dt>更新</dt>
+                  <dd>{formatTime(artifact.updated_at)}</dd>
+                  {artifact.description ? (
+                    <>
+                      <dt>描述</dt>
+                      <dd>{artifact.description}</dd>
+                    </>
+                  ) : null}
+                </dl>
+              )}
+            </div>
+          </div>
+          <div className="panel">
+            <div className="panel-head">
+              <h2>版本</h2>
+              <span className="muted small">{artifact.versions.length}</span>
+            </div>
+            <div className="versions">
+              {artifact.versions.map((version) => (
+                <div
+                  className={version.id === selected.id ? "version active" : "version"}
+                  key={version.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setParams(version.is_current ? {} : { version: version.id })}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") setParams(version.is_current ? {} : { version: version.id })
+                  }}
+                >
+                  <div className="grow">
+                    <div className="version-title">
+                      v{version.version_number}
+                      {version.is_current ? <span className="badge current">当前</span> : null}
+                    </div>
+                    <div className="muted small item-sub">
+                      {formatTime(version.created_at)} · {fileSummary(version.file_count || version.files?.length || 1, version.filename)}
+                      {version.note ? ` · ${version.note}` : ""}
+                    </div>
+                  </div>
+                  {artifact.current_version && fileSignature(version) !== fileSignature(artifact.current_version) ? (
+                    <button
+                      className="btn-text"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        restore(version.id)
+                      }}
+                    >
+                      恢复
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+          <button className="btn-text danger" onClick={remove} style={{ alignSelf: "flex-start" }}>
+            删除产物
+          </button>
+        </aside>
       </div>
     </section>
   )

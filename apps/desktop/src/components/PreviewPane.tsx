@@ -64,16 +64,18 @@ function PreviewBody({ artifactId, versionId, fileId }: Props) {
     }
   }, [artifactId, data, fileId, versionId])
 
-  if (error) return <div className="preview-frame error">{error}</div>
-  if (!data) return <div className="preview-frame muted">正在准备预览…</div>
+  if (error) return <div className="preview-frame center error">{error}</div>
+  if (!data) return <div className="preview-frame center">正在准备预览…</div>
   if (data.error && data.preview_kind !== "pdf" && data.preview_kind !== "json") {
-    return <div className="preview-frame">{data.error}</div>
+    return <div className="preview-frame center">{data.error}</div>
   }
   if (data.preview_kind === "markdown") {
     return (
-      <div className="preview-frame markdown">
-        <ReactMarkdown>{data.text || ""}</ReactMarkdown>
-        {data.truncated ? <p className="muted">内容较长，这里只显示前一部分。</p> : null}
+      <div className="preview-frame">
+        <div className="markdown">
+          <ReactMarkdown>{data.text || ""}</ReactMarkdown>
+          {data.truncated ? <p className="muted">内容较长，这里只显示前一部分。</p> : null}
+        </div>
       </div>
     )
   }
@@ -121,7 +123,7 @@ function PreviewBody({ artifactId, versionId, fileId }: Props) {
       </div>
     )
   }
-  return <div className="preview-frame">此格式暂不支持直接预览，可以使用右侧的下载获取原始文件。</div>
+  return <div className="preview-frame center">此格式暂不支持预览，可以用右上角的「下载」取得原始文件。</div>
 }
 
 function PdfPages({ artifactId, versionId, fileId, onError }: Props & { onError: (message: string) => void }) {
@@ -174,7 +176,7 @@ class PreviewBoundary extends Component<{ children: ReactNode }, { failed: boole
     return { failed: true }
   }
   render() {
-    if (this.state.failed) return <div className="preview-frame">预览组件出错了，原始文件仍可下载。</div>
+    if (this.state.failed) return <div className="preview-frame center">预览出错了，原始文件仍可下载。</div>
     return this.props.children
   }
 }

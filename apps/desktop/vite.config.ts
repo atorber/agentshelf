@@ -10,7 +10,14 @@ import { defineConfig, type Plugin } from "vite"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
+let cachedDataDir = ""
+
 function dataDir(): string {
+  if (!cachedDataDir) cachedDataDir = resolveDataDir()
+  return cachedDataDir
+}
+
+function resolveDataDir(): string {
   if (process.env.AGENTSHELF_DATA_DIR) return process.env.AGENTSHELF_DATA_DIR
   const python = fs.existsSync(path.join(root, ".venv/bin/python"))
     ? path.join(root, ".venv/bin/python")

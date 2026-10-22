@@ -2,7 +2,7 @@
 
 AgentShelf 是面向多个 AI Agent 的本地最终产物库。Claude Code、Cursor、Codex，以及其他支持 Skill 的 Agent，完成任务后把最终成果交到这台电脑上。你可以在一个窗口里检索、预览、保留版本，并在需要时恢复和备份。
 
-文件、检索词和使用记录都留在本机。当前版本是 0.2.1，支持 macOS 与 Windows。
+文件、检索词和使用记录都留在本机。当前版本是 0.2.2，支持 macOS 与 Windows。
 
 ## 文档
 
