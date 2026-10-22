@@ -12,7 +12,7 @@
 | Windows | `%LOCALAPPDATA%\AgentShelf` |
 | Linux | `~/.local/share/AgentShelf` |
 
-设置环境变量 `AGENTSHELF_DATA_DIR` 可以改到其他目录。改之前先停掉正在运行的服务，避免两处数据各写一半。
+设置环境变量 `AGENTSHELF_DATA_DIR` 可以改到其他目录。更换目录前先停止正在运行的服务，使数据写在同一位置。
 
 目录里的主要内容：
 
@@ -33,7 +33,7 @@
 
 服务只绑定回环地址。`AGENTSHELF_HOST` 设成 `127.0.0.1`、`localhost` 和 `::1` 以外的值时，服务会拒绝启动。
 
-默认从 8765 开始找空闲端口，范围到 8865。实际端口写在 `runtime.json`。开发界面地址是 <http://127.0.0.1:1420>，它再去连接本地 API。
+默认从 8765 开始找空闲端口，范围到 8865。实际端口写在 `runtime.json`。本机界面地址是 <http://127.0.0.1:1420>，由它访问本地 API。
 
 单个文件默认上限 200MB。可以用 `AGENTSHELF_MAX_UPLOAD` 调整，单位是字节。`AGENTSHELF_PORT` 用来指定首选端口。
 
@@ -96,4 +96,4 @@ pip install -e ".[semantic]"
 
 检索参数包括 `q`、`project`、`tag`、`source`、`kind`、`mode`、`limit` 和 `offset`。`mode` 为 `keyword`、`semantic` 或 `hybrid`。
 
-直接调用这些接口时，自己附上令牌。日常归档优先用界面或 `agentshelf` 命令，这样重复内容的确认流程和退出码都已经接好。
+直接调用这些接口时附上令牌，并自行处理重复内容的确认。日常归档使用界面或 `agentshelf` 命令。

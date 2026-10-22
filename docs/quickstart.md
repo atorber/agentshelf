@@ -58,7 +58,11 @@ npm install
 npm run tauri dev
 ```
 
-这需要本机已安装 Rust。安装包配置了 macOS dmg 和 Windows nsis，在对应系统上执行 `npm run tauri build`。仓库里不附带已经编好的安装包。
+这需要本机已安装 Rust。在 macOS 上生成 dmg，在 Windows 上生成 nsis：
+
+```bash
+npm run tauri build
+```
 
 ## 让 Agent 归档
 

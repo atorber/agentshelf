@@ -64,8 +64,9 @@ def test_rejects_non_loopback_host(monkeypatch, tmp_path):
 
 
 def test_token_file_is_user_only(data_dir, client):
-    mode = (data_dir / "token").stat().st_mode & 0o777
-    assert mode == 0o600
+    from agentshelf.security import is_user_only
+
+    assert is_user_only(data_dir / "token")
     assert client.get("/api/status").json()["host"] == "127.0.0.1"
 
 
