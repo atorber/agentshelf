@@ -6,11 +6,26 @@ from pathlib import Path
 import httpx
 import typer
 
+from agentshelf import __version__
 from agentshelf.config import load_settings
 from agentshelf.server import running_session, serve, session_endpoint, stop_running
 
 app = typer.Typer(help="AgentShelf 本地产物库", no_args_is_help=True)
 runner_client_timeout = 120.0
+
+
+def _print_version(value: bool) -> None:
+    if not value:
+        return
+    typer.echo(__version__)
+    raise typer.Exit()
+
+
+@app.callback()
+def main(
+    _version: bool = typer.Option(False, "--version", "-V", help="显示版本", callback=_print_version, is_eager=True),
+) -> None:
+    """AgentShelf 本地产物库。"""
 
 
 def _client() -> httpx.Client:

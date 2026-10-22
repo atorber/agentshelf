@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from agentshelf.config import Settings, load_settings
+from agentshelf.config import Settings, app_version, load_settings
 from agentshelf.errors import LibraryError
 from agentshelf.library import Library
 from agentshelf.security import check_token
@@ -37,7 +37,7 @@ def create_app(settings: Settings | None = None, *, testing: bool = False, embed
         if getattr(app.state, "advertise_port", None):
             _clear_runtime(resolved)
 
-    app = FastAPI(title="AgentShelf", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="AgentShelf", version=app_version(), lifespan=lifespan)
     app.state.library = library
     app.state.worker = worker
     app.state.testing = testing
@@ -80,7 +80,7 @@ def create_app(settings: Settings | None = None, *, testing: bool = False, embed
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.1.0"}
+        return {"ok": True, "version": app_version()}
 
     @app.get("/api/status", dependencies=[Depends(require_token)])
     def status():

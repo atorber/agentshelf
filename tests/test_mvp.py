@@ -428,6 +428,19 @@ def test_cli_archives_through_the_local_api(data_dir, tmp_path):
         thread.join(timeout=5)
 
 
+def test_cli_and_skill_report_the_package_version():
+    from agentshelf import __version__
+    from agentshelf.cli import app as cli_app
+    from typer.testing import CliRunner
+
+    skill = (ROOT / "skill" / "agentshelf-archive" / "SKILL.md").read_text(encoding="utf-8")
+    frontmatter = skill.split("---", 2)[1]
+    assert f"version: {__version__}" in frontmatter
+    result = CliRunner().invoke(cli_app, ["--version"])
+    assert result.exit_code == 0, result.output
+    assert result.output.strip() == __version__
+
+
 def test_release_launcher_names_match_the_skill():
     from agentshelf.release_assets import RELEASE_DOWNLOAD, checksum_filename, install_path, launcher_filename
 
