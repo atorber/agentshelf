@@ -59,6 +59,9 @@ export function DetailPage() {
   }
 
   useEffect(() => {
+    setArtifact(null)
+    setError("")
+    setNotice("")
     load()
   }, [id])
 

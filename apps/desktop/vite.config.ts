@@ -72,10 +72,16 @@ function forwardApi(req: IncomingMessage, res: ServerResponse, next: (error?: un
   )
   proxyReq.on("error", () => {
     if (!res.headersSent) {
-      res.writeHead(502, { "Content-Type": "text/plain; charset=utf-8" }).end("本地服务不可用")
+      const message = JSON.stringify({ detail: "本地服务不可用" })
+      res.writeHead(502, { "Content-Type": "application/json; charset=utf-8" }).end(message)
     }
   })
-  req.pipe(proxyReq)
+  const method = req.method || "GET"
+  if (method === "GET" || method === "HEAD") {
+    proxyReq.end()
+  } else {
+    req.pipe(proxyReq)
+  }
 }
 
 function apiProxy(): Plugin {

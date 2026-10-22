@@ -18,6 +18,8 @@ export function LibraryPage() {
   const [tags, setTags] = useState<Tag[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
   const [error, setError] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     Promise.all([listProjects(), listTags(), listAgents()])
@@ -26,18 +28,21 @@ export function LibraryPage() {
         setTags(tagBody.items)
         setAgents(agentBody.items)
       })
-      .catch(() => undefined)
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "筛选项读取失败"))
   }, [])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      setLoading(true)
       listArtifacts({ q: query, project, tag, source, kind, mode: query ? mode : "keyword" })
         .then((body) => {
           setItems(body.items)
           setTotal(body.total)
           setError("")
+          setReady(true)
         })
         .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "检索失败"))
+        .finally(() => setLoading(false))
     }, 180)
     return () => window.clearTimeout(timer)
   }, [kind, mode, project, query, source, tag])
@@ -106,9 +111,10 @@ export function LibraryPage() {
         </label>
       </div>
       {error ? <p className="error">{error}</p> : null}
-      <p className="muted">{total} 条结果</p>
-      {items.length === 0 ? <div className="empty">还没有匹配的产物。上传文件，或让 Agent 通过 CLI 归档最终稿。</div> : null}
-      {query ? (
+      {!ready && loading ? <div className="empty">正在读取产物库…</div> : null}
+      {ready ? <p className="muted">{loading ? "正在更新…" : `${total} 条结果`}</p> : null}
+      {ready && !loading && items.length === 0 ? <div className="empty">还没有匹配的产物。上传文件，或让 Agent 通过 CLI 归档最终稿。</div> : null}
+      {ready && query ? (
         <div className="list">
           {items.map((item) => (
             <Link className="result" key={item.version_id} to={`/artifacts/${item.artifact_id}?version=${item.version_id}`}>
@@ -124,7 +130,7 @@ export function LibraryPage() {
             </Link>
           ))}
         </div>
-      ) : (
+      ) : ready ? (
         <div className="grid">
           {items.map((item) => (
             <Link className="card" key={item.artifact_id} to={`/artifacts/${item.artifact_id}`}>
@@ -146,7 +152,7 @@ export function LibraryPage() {
             </Link>
           ))}
         </div>
-      )}
+      ) : null}
     </section>
   )
 }

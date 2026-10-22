@@ -241,9 +241,17 @@ def _backfill_version_files(conn: sqlite3.Connection) -> None:
 
 
 def integrity_ok(path: Path) -> bool:
+    return _pragma_ok(path, "integrity_check")
+
+
+def quick_check_ok(path: Path) -> bool:
+    return _pragma_ok(path, "quick_check")
+
+
+def _pragma_ok(path: Path, pragma: str) -> bool:
     try:
         with db_session(path) as conn:
-            row = conn.execute("PRAGMA integrity_check").fetchone()
+            row = conn.execute(f"PRAGMA {pragma}").fetchone()
         return bool(row) and str(row[0]) == "ok"
     except sqlite3.DatabaseError:
         return False

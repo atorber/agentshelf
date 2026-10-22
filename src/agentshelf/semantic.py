@@ -74,12 +74,20 @@ def validate_model_dir(path: Path) -> dict:
     }
 
 
+_PACKAGE_READY: bool | None = None
+
+
 def sentence_transformers_available() -> bool:
+    global _PACKAGE_READY
+    if _PACKAGE_READY is not None:
+        return _PACKAGE_READY
     try:
         import sentence_transformers  # noqa: F401
     except Exception:  # noqa: BLE001
-        return False
-    return True
+        _PACKAGE_READY = False
+    else:
+        _PACKAGE_READY = True
+    return _PACKAGE_READY
 
 
 class SentenceTransformerEmbedder:

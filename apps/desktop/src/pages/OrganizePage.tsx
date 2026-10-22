@@ -7,6 +7,7 @@ export function OrganizePage() {
   const [tags, setTags] = useState<Tag[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
   const [error, setError] = useState("")
+  const [loading, setLoading] = useState(true)
 
   async function reload() {
     const [projectBody, tagBody, agentBody] = await Promise.all([listProjects(), listTags(), listAgents()])
@@ -16,7 +17,9 @@ export function OrganizePage() {
   }
 
   useEffect(() => {
-    reload().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "读取失败"))
+    reload()
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "读取失败"))
+      .finally(() => setLoading(false))
   }, [])
 
   return (
@@ -28,6 +31,9 @@ export function OrganizePage() {
         </div>
       </div>
       {error ? <p className="error">{error}</p> : null}
+      {loading ? (
+        <div className="empty">正在读取项目、标签和来源…</div>
+      ) : (
       <div className="columns">
         <Manager
           title="项目"
@@ -53,6 +59,7 @@ export function OrganizePage() {
           onDelete={(id) => deleteAgent(id).then(reload)}
         />
       </div>
+      )}
     </section>
   )
 }

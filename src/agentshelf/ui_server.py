@@ -151,9 +151,9 @@ def make_handler(root: Path):
                 status = exc.code
                 forwarded = exc.headers
             except URLError:
-                message = "本地服务不可用".encode("utf-8")
+                message = '{"detail":"本地服务不可用"}'.encode("utf-8")
                 self.send_response(502)
-                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Content-Length", str(len(message)))
                 self.send_header("Connection", "close")
                 self.end_headers()

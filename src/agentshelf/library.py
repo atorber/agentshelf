@@ -5,13 +5,14 @@ import json
 import logging
 import os
 import re
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 from agentshelf.backup import create_backup, list_backups, resolve_backup, restore_backup
 from agentshelf.config import Settings, app_version
-from agentshelf.db import db_session, init_db, integrity_ok
+from agentshelf.db import db_session, init_db, quick_check_ok
 from agentshelf.errors import LibraryError
 from agentshelf.extract import extract_text, preview_payload
 from agentshelf.security import ensure_token
@@ -93,6 +94,7 @@ class Library:
         self.token = ensure_token(settings.token_path)
         self.tokenizer = init_db(settings.db_path)
         self._embedder = embedder
+        self._status_cache: tuple[float, dict] | None = None
         self.maintenance = False
         self._gc_staging()
 
@@ -101,7 +103,10 @@ class Library:
             raise LibraryError(503, "正在恢复备份，请稍后再试")
 
     def status(self) -> dict:
-        db_ok = integrity_ok(self.settings.db_path)
+        now = time.monotonic()
+        if self._status_cache is not None and now - self._status_cache[0] < 3:
+            return self._status_cache[1]
+        db_ok = quick_check_ok(self.settings.db_path)
         with db_session(self.settings.db_path) as conn:
             job_rows = conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status").fetchall()
             artifact_count = conn.execute("SELECT COUNT(*) AS n FROM artifacts").fetchone()["n"]
@@ -116,9 +121,10 @@ class Library:
             semantic = self._semantic_view(conn)
         jobs = {row["status"]: row["n"] for row in job_rows}
         db_bytes = _file_size(self.settings.db_path) + _file_size(self.settings.db_path.with_name("library.db-wal"))
-        objects_bytes = directory_size(self.settings.objects_dir)
+        with db_session(self.settings.db_path) as conn:
+            objects_bytes = int(conn.execute("SELECT COALESCE(SUM(size_bytes), 0) AS n FROM file_objects").fetchone()["n"])
         backup_bytes = directory_size(self.settings.backups_dir)
-        return {
+        payload = {
             "version": app_version(),
             "host": self.settings.host,
             "data_dir": str(self.settings.data_dir),
@@ -143,6 +149,8 @@ class Library:
             },
             "semantic": semantic,
         }
+        self._status_cache = (now, payload)
+        return payload
 
     def list_jobs(self) -> list[dict]:
         with db_session(self.settings.db_path) as conn:

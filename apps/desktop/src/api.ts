@@ -35,11 +35,28 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json")
   }
-  const response = await fetch(`${session.base}${path}`, { ...options, headers })
+  let response: Response
+  try {
+    response = await fetch(`${session.base}${path}`, { ...options, headers, signal: AbortSignal.timeout(20000) })
+  } catch (reason) {
+    if (reason instanceof DOMException && reason.name === "TimeoutError") {
+      throw new Error("本地服务响应超时")
+    }
+    throw new Error(reason instanceof Error && reason.message ? reason.message : "本地服务不可用")
+  }
   const text = await response.text()
-  const body = text ? JSON.parse(text) : null
+  let body: { detail?: string } | null = null
+  if (text) {
+    try {
+      body = JSON.parse(text) as { detail?: string }
+    } catch {
+      if (!response.ok) throw new Error(text.trim() || "请求失败")
+      throw new Error("服务返回了无法解析的内容")
+    }
+  }
   if (!response.ok) {
-    throw new Error(body?.detail || "请求失败")
+    const detail = typeof body?.detail === "string" ? body.detail : ""
+    throw new Error(detail || "请求失败")
   }
   return body as T
 }
@@ -193,7 +210,7 @@ export function uploadFiles(files: File[], fields: Record<string, string>, onPro
       try {
         body = JSON.parse(xhr.responseText || "{}")
       } catch {
-        reject(new Error("响应无法解析"))
+        reject(new Error((xhr.responseText || "").trim() || "响应无法解析"))
         return
       }
       if (xhr.status === 409 && body.status === "needs_decision") {

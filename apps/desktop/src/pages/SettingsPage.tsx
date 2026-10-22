@@ -9,6 +9,7 @@ export function SettingsPage() {
   const [modelPath, setModelPath] = useState("")
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
+  const [loading, setLoading] = useState(true)
 
   async function reload() {
     const [body, backupBody] = await Promise.all([status(), listBackups()])
@@ -18,7 +19,9 @@ export function SettingsPage() {
   }
 
   useEffect(() => {
-    reload().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "读取失败"))
+    reload()
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "读取失败"))
+      .finally(() => setLoading(false))
   }, [])
 
   async function run(action: () => Promise<unknown>, success: string) {
@@ -46,7 +49,10 @@ export function SettingsPage() {
       </div>
       {message ? <div className="notice">{message}</div> : null}
       {error ? <p className="error">{error}</p> : null}
-
+      {loading && !info ? (
+        <div className="empty">正在读取设置…</div>
+      ) : (
+        <>
       <div className="panel stack">
         <h2>服务</h2>
         <div>版本 {info?.version || "—"} · 监听 {info?.host || "127.0.0.1"} · 索引 {info?.fts_tokenizer || "—"}</div>
@@ -182,6 +188,8 @@ export function SettingsPage() {
           <li>日志写在数据目录的 logs，不会发往外部服务器。</li>
         </ul>
       </div>
+        </>
+      )}
     </section>
   )
 }
