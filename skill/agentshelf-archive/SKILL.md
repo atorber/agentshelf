@@ -1,6 +1,6 @@
 ---
 name: agentshelf-archive
-description: 把当前任务的最终产物归档到本地 AgentShelf。用户说「把这份最终稿归档到 AgentShelf」或要求保存最终稿、收入产物库时使用。自行确定文件，并填写名称、项目、标签、来源和描述，不要向用户索要这些字段。调用前先准备启动器：本机没有时从 GitHub Release 下载对应系统的二进制，不要克隆仓库。不要归档思考过程、日志或中间文件。
+description: 把当前任务的最终产物归档到本地 AgentShelf。用户说「把这份最终稿归档到 AgentShelf」或要求保存最终稿、收入产物库时使用。自行确定文件，并填写名称、项目、标签、来源和描述，不要向用户索要这些字段。调用前先检查服务是否已经启动，已启动就直接使用。否则检查发布的启动器二进制；没有就从 GitHub Release 下载。下载失败再用 ~/.agentshelf/app 里的 scripts/launch.py，最后才用当前仓库。不要克隆仓库。不要归档思考过程、日志或中间文件。
 ---
 
 # AgentShelf 归档
@@ -9,20 +9,21 @@ description: 把当前任务的最终产物归档到本地 AgentShelf。用户�
 
 ## 部署
 
-安装本 Skill 时，以及每次归档之前，都要先部署。没有看到以 `AGENTSHELF_LAUNCHED` 开头的成功输出时，不要执行归档，也不要声称已经打开。
+安装本 Skill 时，以及每次归档之前，都要先确认服务。服务已经在运行时，直接使用，不要下载，也不要重新启动。服务没在运行时，才按下面的顺序启动；没有看到以 `AGENTSHELF_LAUNCHED` 开头的成功输出时，不要执行归档，也不要声称已经打开。
 
-按这个顺序选择唯一的启动器，不要同时部署多份：
+只选一个启动器，不要同时部署多份。按这个优先级：
 
-1. 当前工作区包含 `scripts/launch.py`，且 `pyproject.toml` 里的项目名是 `agentshelf` 时，使用这份源码里的启动器。
-2. 否则，如果已有源码目录里存在 `scripts/launch.py`，使用该目录。macOS 和 Linux 为 `~/.agentshelf/app`，Windows 为 `%USERPROFILE%\.agentshelf\app`。
-3. 否则，如果已经下载过发布的启动器，直接运行它。macOS 和 Linux 为 `~/.agentshelf/bin/agentshelf-launcher`，Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`。
-4. 以上都没有时，从最新的 GitHub Release 下载与本机系统对应的二进制，保存为第 3 步的路径后再运行。不要克隆仓库来代替下载。
+1. 先检查服务是否已经启动。macOS 读取 `~/Library/Application Support/AgentShelf/runtime.json`，Linux 读取 `~/.local/share/AgentShelf/runtime.json`，Windows 读取 `%LOCALAPPDATA%\AgentShelf\runtime.json`。文件里有 `port` 时，请求 `http://127.0.0.1:<port>/api/health`。返回成功就直接使用这个服务，后面的下载和启动都跳过。
+2. 服务没在运行时，检查发布的二进制。macOS 和 Linux 为 `~/.agentshelf/bin/agentshelf-launcher`，Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`。文件存在且可以执行时，直接运行，不要加参数。
+3. 二进制不存在时，从最新的 GitHub Release 下载与本机系统对应的文件，保存为第 2 步的路径后再运行。不要克隆仓库来代替下载。
+4. 下载失败时，使用 `~/.agentshelf/app` 里的 `scripts/launch.py`。Windows 为 `%USERPROFILE%\.agentshelf\app\scripts\launch.py`。这个文件不存在就跳过。
+5. 最后才使用当前仓库。当前工作区包含 `scripts/launch.py`，且 `pyproject.toml` 里的项目名是 `agentshelf` 时，用这份源码启动。前面的办法都不可用时，报告下载地址和错误并停止，不要声称已经打开。
 
-已有二进制无法执行时，删掉该文件后重新下载一次。下载失败时报告地址和错误，不要改用克隆，也不要声称已经打开。
+服务已经启动、但本机还没有可执行的归档命令时，按第 2 到第 5 步寻找或下载程序，并且只执行 `archive`，不要无参数启动。已有二进制无法执行时，删掉该文件后重新下载一次。重新下载仍然失败时，再按第 4 步和第 5 步继续。
 
 ### 源码启动器
 
-在对应目录执行：
+只在下载失败之后使用。在 `~/.agentshelf/app`（Windows 为 `%USERPROFILE%\.agentshelf\app`）执行；当前仓库是最后一步，工作目录换成当前仓库根目录。命令相同：
 
 ```bash
 python3 scripts/launch.py
@@ -71,7 +72,7 @@ Windows：
 AGENTSHELF_LAUNCHED {"backend":"http://127.0.0.1:8765","desktop":"http://127.0.0.1:1420","data_dir":"...","bin":"..."}
 ```
 
-界面没有自动打开时，打开输出里的 `desktop` 地址。记下其中的 `bin`。随后的归档命令都使用这个路径，不要改用系统里同名的其他命令。启动器退出码不为 0，或输出里没有 `AGENTSHELF_LAUNCHED` 时，向用户报告错误并停止，不要声称已经归档。
+界面没有自动打开时，打开输出里的 `desktop` 地址。记下其中的 `bin`。随后的归档命令都使用这个路径，不要改用系统里同名的其他命令。服务已经在运行并跳过启动时，归档命令使用本机已有的程序，不要求再出现这一行。启动器退出码不为 0，或服务未运行且输出里没有 `AGENTSHELF_LAUNCHED` 时，向用户报告错误并停止，不要声称已经归档。
 
 ## 归档
 

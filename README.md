@@ -38,7 +38,7 @@ chmod +x scripts/dev.sh
 
 脚本会准备虚拟环境、启动本地服务，并打开界面：<http://127.0.0.1:1420>。关闭这个终端时，由它启动的服务会一起停止。
 
-Skill 归档前使用启动器。在本仓库里运行时，它会准备依赖，拉起后端和桌面界面，然后退出；服务继续在后台运行。已经启动过时会直接复用。
+Skill 归档前先检查服务是否已经启动。`runtime.json` 里的端口能通过 `/api/health` 时，直接使用现有服务，不再下载或重新启动。服务没在运行时，才检查发布的二进制；没有就从最新 Release 下载。下载失败时再用 `~/.agentshelf/app` 里的 `scripts/launch.py`，最后才用当前仓库的 `scripts/launch.py`。启动器拉起后端和桌面界面后退出，服务继续在后台运行。
 
 ```bash
 python3 scripts/launch.py
@@ -46,7 +46,7 @@ python3 scripts/launch.py
 
 成功时输出以 `AGENTSHELF_LAUNCHED` 开头，并带上本机 `agentshelf` 命令的路径。需要桌面窗口而不是浏览器界面时，执行 `python3 scripts/launch.py --desktop tauri`。这需要本机已安装 Rust。
 
-发布 GitHub Release 时，工作流会把启动器编译成各系统的单个可执行文件，连同 SHA-256 校验文件上传到该 Release。本机没有源码启动器时，Skill 从最新 Release 下载对应系统的文件，保存为 `~/.agentshelf/bin/agentshelf-launcher`（Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`）。这个文件包含后端和本机界面，运行时不需要另外安装 Python 或 Node。
+发布 GitHub Release 时，工作流会把启动器编译成各系统的单个可执行文件，连同 SHA-256 校验文件上传到该 Release。本机没有 `~/.agentshelf/bin/agentshelf-launcher`（Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`）时，Skill 从最新 Release 下载对应系统的文件。这个文件包含后端和本机界面，运行时不需要另外安装 Python 或 Node。下载失败时，再用 `~/.agentshelf/app` 里的 `scripts/launch.py`，最后才用当前仓库。
 
 只启动服务：
 
@@ -93,7 +93,7 @@ agentshelf stop
 请从 https://github.com/atorber/agentshelf 安装 Skill agentshelf-archive（目录 skill/agentshelf-archive）。安装到我当前使用的 Agent 的用户级 skills 目录，使所有项目可用。安装完成后告诉我安装位置。
 ```
 
-归档时对 Agent 说：「把这份最终稿归档到 AgentShelf。」名称、项目、标签和来源由 Skill 根据当前任务填写。安装 Skill 时如果本机还没有启动器，Skill 会从最新 Release 下载对应系统的二进制。
+归档时对 Agent 说：「把这份最终稿归档到 AgentShelf。」名称、项目、标签和来源由 Skill 根据当前任务填写。安装 Skill 时先看服务是否已经启动；没启动才检查发布的启动器二进制，没有就从最新 Release 下载。
 
 ## 主要接口
 

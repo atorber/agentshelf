@@ -440,8 +440,14 @@ def test_release_launcher_names_match_the_skill():
         ("Linux", "aarch64"),
         ("Windows", "AMD64"),
     ]
+    deploy = skill.split("## 部署", 1)[1].split("## 归档", 1)[0]
+    steps = "\n".join(line for line in deploy.splitlines() if line.startswith(("1. ", "2. ", "3. ", "4. ", "5. ")))
     assert "git clone" not in skill
     assert RELEASE_DOWNLOAD in skill
+    assert steps.index("runtime.json") < steps.index("agentshelf-launcher")
+    assert steps.index("agentshelf-launcher") < steps.index("GitHub Release")
+    assert steps.index("GitHub Release") < steps.index("~/.agentshelf/app")
+    assert steps.index("~/.agentshelf/app") < steps.index("当前工作区包含 `scripts/launch.py`")
     assert "launcher_stem" in workflow
     assert "gh release upload" in workflow
     assert "types: [published]" in workflow
