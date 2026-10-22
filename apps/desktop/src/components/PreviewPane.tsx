@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { artifactQuery, fetchVerifiedBlob, preview } from "../api"
 import { displayKind } from "../format"
+import { placeAttachments } from "../placeAttachments"
 import type { ArtifactFile, Preview } from "../types"
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
   versionId?: string
   fileId?: string
   assets?: ArtifactFile[]
+  embedAssets?: boolean
   onOpenAsset?: (file: ArtifactFile) => void
 }
 
@@ -27,15 +29,15 @@ function findAsset(src: string | undefined, assets: ArtifactFile[]): ArtifactFil
   return assets.find((file) => file.filename === name || file.filename === base)
 }
 
-export function PreviewPane({ artifactId, versionId, fileId, assets, onOpenAsset }: Props) {
+export function PreviewPane({ artifactId, versionId, fileId, assets, embedAssets, onOpenAsset }: Props) {
   return (
     <PreviewBoundary key={`${artifactId}:${versionId || "current"}:${fileId || "first"}`}>
-      <PreviewBody artifactId={artifactId} versionId={versionId} fileId={fileId} assets={assets} onOpenAsset={onOpenAsset} />
+      <PreviewBody artifactId={artifactId} versionId={versionId} fileId={fileId} assets={assets} embedAssets={embedAssets} onOpenAsset={onOpenAsset} />
     </PreviewBoundary>
   )
 }
 
-function PreviewBody({ artifactId, versionId, fileId, assets = [], onOpenAsset }: Props) {
+function PreviewBody({ artifactId, versionId, fileId, assets = [], embedAssets = false, onOpenAsset }: Props) {
   const [data, setData] = useState<Preview | null>(null)
   const [error, setError] = useState("")
   const [imageUrl, setImageUrl] = useState("")
@@ -127,7 +129,7 @@ function PreviewBody({ artifactId, versionId, fileId, assets = [], onOpenAsset }
               },
             }}
           >
-            {data.text || ""}
+            {embedAssets ? placeAttachments(data.text || "", assets, data.filename) : data.text || ""}
           </ReactMarkdown>
           {data.truncated ? <p className="muted">内容较长，这里只显示前一部分。</p> : null}
         </div>

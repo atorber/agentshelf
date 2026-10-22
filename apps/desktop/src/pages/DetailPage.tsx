@@ -246,7 +246,7 @@ export function DetailPage() {
               <span className="muted small">{shown?.filename}</span>
             </div>
           ) : null}
-          <PreviewPane artifactId={id} versionId={selected.id} fileId={shown?.id || undefined} assets={files} onOpenAsset={openSidecar} />
+          <PreviewPane artifactId={id} versionId={selected.id} fileId={shown?.id || undefined} assets={files} embedAssets={!inSidecar} onOpenAsset={openSidecar} />
           {shown ? (
             <div className="viewer-foot">
               <span className="muted small">
