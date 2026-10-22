@@ -64,6 +64,6 @@ nav:
   - 产品说明: product.md
   - 快速开始: quickstart.md
   - 使用说明: usage.md
-  - 命令行与 Skill: cli-and-skill.md
-  - 数据与接口: reference.md
+  - 在 Agent 中使用: agent.md
   - 排查: troubleshooting.md
+  - 开发者: developers.md
