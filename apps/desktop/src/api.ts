@@ -73,14 +73,20 @@ export function restoreVersion(artifactId: string, versionId: string) {
   return request<Artifact>(`/api/artifacts/${artifactId}/versions/${versionId}/restore`, { method: "POST" })
 }
 
-export function preview(artifactId: string, versionId?: string) {
-  const query = versionId ? `?version_id=${encodeURIComponent(versionId)}` : ""
-  return request<Preview>(`/api/artifacts/${artifactId}/preview${query}`)
+export function artifactQuery(versionId?: string, fileId?: string) {
+  const params = new URLSearchParams()
+  if (versionId) params.set("version_id", versionId)
+  if (fileId) params.set("file_id", fileId)
+  const text = params.toString()
+  return text ? `?${text}` : ""
 }
 
-export function verify(artifactId: string, versionId?: string) {
-  const query = versionId ? `?version_id=${encodeURIComponent(versionId)}` : ""
-  return request<{ ok: boolean; expected: string; actual: string }>(`/api/artifacts/${artifactId}/verify${query}`)
+export function preview(artifactId: string, versionId?: string, fileId?: string) {
+  return request<Preview>(`/api/artifacts/${artifactId}/preview${artifactQuery(versionId, fileId)}`)
+}
+
+export function verify(artifactId: string, versionId?: string, fileId?: string) {
+  return request<{ ok: boolean; expected: string; actual: string }>(`/api/artifacts/${artifactId}/verify${artifactQuery(versionId, fileId)}`)
 }
 
 export function listProjects() {
@@ -173,7 +179,7 @@ export function clearSemantic() {
   return request<Status["semantic"]>("/api/semantic", { method: "DELETE" })
 }
 
-export function uploadFile(file: File, fields: Record<string, string>, onProgress: (ratio: number) => void) {
+export function uploadFiles(files: File[], fields: Record<string, string>, onProgress: (ratio: number) => void) {
   return new Promise<IngestResult>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open("POST", `${session.base}/api/ingest`)
@@ -201,7 +207,7 @@ export function uploadFile(file: File, fields: Record<string, string>, onProgres
       reject(new Error(body.detail || "上传失败"))
     }
     const data = new FormData()
-    data.append("file", file)
+    files.forEach((file) => data.append(files.length === 1 ? "file" : "files", file))
     Object.entries(fields).forEach(([key, value]) => data.append(key, value))
     xhr.send(data)
   })
@@ -228,9 +234,8 @@ export function saveBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-export async function downloadArtifact(artifactId: string, versionId: string | undefined, filename: string) {
-  const query = versionId ? `?version_id=${encodeURIComponent(versionId)}` : ""
-  const file = await fetchVerifiedBlob(`/api/artifacts/${artifactId}/download${query}`)
+export async function downloadArtifact(artifactId: string, versionId: string | undefined, filename: string, fileId?: string) {
+  const file = await fetchVerifiedBlob(`/api/artifacts/${artifactId}/download${artifactQuery(versionId, fileId)}`)
   if (!file.verified) throw new Error("哈希校验失败，已取消保存")
   saveBlob(file.blob, filename)
   return file.sha

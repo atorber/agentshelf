@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -76,6 +77,23 @@ CREATE TABLE IF NOT EXISTS artifact_versions (
   UNIQUE(artifact_id, version_number)
 );
 
+CREATE TABLE IF NOT EXISTS version_files (
+  id INTEGER PRIMARY KEY,
+  public_id TEXT NOT NULL UNIQUE,
+  version_id INTEGER NOT NULL REFERENCES artifact_versions(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  file_object_id INTEGER NOT NULL REFERENCES file_objects(id),
+  original_filename TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  preview_kind TEXT NOT NULL DEFAULT 'unsupported',
+  extracted_text TEXT NOT NULL DEFAULT '',
+  extract_status TEXT NOT NULL DEFAULT 'pending',
+  extract_error TEXT NOT NULL DEFAULT '',
+  UNIQUE(version_id, position)
+);
+
 CREATE TABLE IF NOT EXISTS artifact_tags (
   artifact_id INTEGER NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
   tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
@@ -103,6 +121,8 @@ CREATE TABLE IF NOT EXISTS embeddings (
 
 CREATE INDEX IF NOT EXISTS idx_versions_artifact ON artifact_versions(artifact_id);
 CREATE INDEX IF NOT EXISTS idx_versions_sha ON artifact_versions(sha256);
+CREATE INDEX IF NOT EXISTS idx_version_files_version ON version_files(version_id);
+CREATE INDEX IF NOT EXISTS idx_version_files_sha ON version_files(sha256);
 CREATE INDEX IF NOT EXISTS idx_artifacts_project ON artifacts(project_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_updated ON artifacts(updated_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
@@ -154,6 +174,8 @@ def init_db(path: Path) -> str:
     conn.execute("PRAGMA busy_timeout=5000")
     try:
         conn.executescript(SCHEMA)
+        _backfill_version_files(conn)
+        conn.commit()
         row = conn.execute("SELECT value FROM settings WHERE key = 'fts_tokenizer'").fetchone()
         if row:
             return str(row["value"])
@@ -185,6 +207,37 @@ def init_db(path: Path) -> str:
         return tokenizer
     finally:
         conn.close()
+
+
+def _backfill_version_files(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT v.* FROM artifact_versions v
+        WHERE NOT EXISTS (SELECT 1 FROM version_files vf WHERE vf.version_id = v.id)
+        """
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            """
+            INSERT INTO version_files(
+              public_id, version_id, position, file_object_id, original_filename, mime_type,
+              size_bytes, sha256, preview_kind, extracted_text, extract_status, extract_error
+            ) VALUES(?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                row["id"],
+                row["file_object_id"],
+                row["original_filename"],
+                row["mime_type"],
+                row["size_bytes"],
+                row["sha256"],
+                row["preview_kind"],
+                row["extracted_text"],
+                row["extract_status"],
+                row["extract_error"],
+            ),
+        )
 
 
 def integrity_ok(path: Path) -> bool:

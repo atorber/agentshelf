@@ -1,83 +1,75 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
-import { confirmIngest, uploadFile } from "../api"
+import { confirmIngest, uploadFiles } from "../api"
+import { formatBytes } from "../format"
 import type { IngestResult } from "../types"
 
-interface QueuedFile {
-  key: string
-  file: File
-  title: string
-  progress: number
-  result?: IngestResult
-  error?: string
-}
-
 export function UploadPage() {
-  const [items, setItems] = useState<QueuedFile[]>([])
+  const [files, setFiles] = useState<File[]>([])
   const [over, setOver] = useState(false)
+  const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [project, setProject] = useState("")
   const [tags, setTags] = useState("")
   const [source, setSource] = useState("")
   const [running, setRunning] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [result, setResult] = useState<IngestResult | null>(null)
+  const [error, setError] = useState("")
 
-  function addFiles(files: FileList | File[]) {
-    const next = Array.from(files).map((file) => ({
-      key: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
-      file,
-      title: file.name.replace(/\.[^.]+$/, "") || file.name,
-      progress: 0,
-    }))
-    setItems((current) => [...current, ...next])
+  function addFiles(incoming: FileList | File[]) {
+    const next = Array.from(incoming)
+    if (next.length === 0) return
+    setFiles((current) => [...current, ...next])
+    setResult(null)
+    setError("")
+    setProgress(0)
+    setTitle((current) => current || (next.length === 1 ? next[0].name.replace(/\.[^.]+$/, "") || next[0].name : ""))
   }
 
-  const pending = useMemo(() => items.filter((item) => !item.result && !item.error), [items])
+  const pending = useMemo(() => files.length > 0 && !result, [files.length, result])
 
   async function start() {
     setRunning(true)
-    for (const item of items) {
-      if (item.result || item.error) continue
-      try {
-        const result = await uploadFile(
-          item.file,
-          {
-            title: item.title,
-            description,
-            project,
-            tags,
-            source_agent: source,
-          },
-          (ratio) => {
-            setItems((current) => current.map((entry) => (entry.key === item.key ? { ...entry, progress: ratio } : entry)))
-          },
-        )
-        setItems((current) => current.map((entry) => (entry.key === item.key ? { ...entry, progress: 1, result } : entry)))
-      } catch (reason) {
-        const message = reason instanceof Error ? reason.message : "上传失败"
-        setItems((current) => current.map((entry) => (entry.key === item.key ? { ...entry, error: message } : entry)))
-      }
+    setError("")
+    try {
+      const body = await uploadFiles(
+        files,
+        {
+          title: title || (files.length === 1 ? files[0].name.replace(/\.[^.]+$/, "") || files[0].name : ""),
+          description,
+          project,
+          tags,
+          source_agent: source,
+        },
+        setProgress,
+      )
+      setResult(body)
+      setProgress(1)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "上传失败")
     }
     setRunning(false)
   }
 
-  async function choose(item: QueuedFile, decision: "new_artifact" | "new_version", artifactId?: string) {
-    if (!item.result?.staging_id) return
+  async function choose(decision: "new_artifact" | "new_version", artifactId?: string) {
+    if (!result?.staging_id) return
     try {
-      const result = await confirmIngest({
-        staging_id: item.result.staging_id,
+      const body = await confirmIngest({
+        staging_id: result.staging_id,
         decision,
         artifact_id: artifactId,
-        title: item.title,
+        title,
         description,
         project,
         tags,
         source_agent: source,
-        filename: item.file.name,
+        filename: files[0]?.name,
       })
-      setItems((current) => current.map((entry) => (entry.key === item.key ? { ...entry, result, error: undefined } : entry)))
+      setResult(body)
+      setError("")
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : "确认失败"
-      setItems((current) => current.map((entry) => (entry.key === item.key ? { ...entry, error: message } : entry)))
+      setError(reason instanceof Error ? reason.message : "确认失败")
     }
   }
 
@@ -86,7 +78,7 @@ export function UploadPage() {
       <div className="page-head">
         <div>
           <h1>上传</h1>
-          <p>可以一次放入多个文件。某个文件失败时，已经成功的文件会保留。</p>
+          <p>一次放入的文件会归档为同一份产物。只有一个文件时，打开详情会直接预览。</p>
         </div>
       </div>
       <div
@@ -103,7 +95,7 @@ export function UploadPage() {
         }}
       >
         <strong>拖拽文件到这里</strong>
-        <p className="muted">或选择本机文件。上传前可以改名称、描述、项目和标签。</p>
+        <p className="muted">或选择本机文件。多个文件属于同一份最终成果时，一起放进来。</p>
         <label className="btn-primary">
           选择文件
           <input
@@ -119,6 +111,10 @@ export function UploadPage() {
       </div>
       <div className="panel stack" style={{ marginTop: 16 }}>
         <div className="filters">
+          <label className="field grow">
+            <span>名称</span>
+            <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={files.length > 1 ? "这一组文件的名称" : "默认使用文件名"} />
+          </label>
           <label className="field grow">
             <span>描述</span>
             <input value={description} onChange={(event) => setDescription(event.target.value)} />
@@ -136,31 +132,35 @@ export function UploadPage() {
             <input value={source} onChange={(event) => setSource(event.target.value)} placeholder="例如 cursor" />
           </label>
         </div>
-        {items.map((item) => (
-          <div className="file-row" key={item.key}>
-            <label className="field">
-              <span>{item.file.name}</span>
-              <input
-                value={item.title}
-                onChange={(event) =>
-                  setItems((current) => current.map((entry) => (entry.key === item.key ? { ...entry, title: event.target.value } : entry)))
-                }
-              />
-            </label>
+        {files.map((file, index) => (
+          <div className="file-row" key={`${file.name}-${file.size}-${file.lastModified}-${index}`}>
             <div>
-              <div className="progress">
-                <span style={{ width: `${Math.round(item.progress * 100)}%` }} />
-              </div>
-              <FileState item={item} onChoose={choose} />
+              <strong>{file.name}</strong>
+              <div className="muted">{formatBytes(file.size)}</div>
             </div>
-            <button className="btn-ghost" onClick={() => setItems((current) => current.filter((entry) => entry.key !== item.key))} disabled={running}>
+            <button
+              className="btn-ghost"
+              disabled={running}
+              onClick={() => {
+                setFiles((current) => current.filter((_, item) => item !== index))
+                setResult(null)
+                setError("")
+              }}
+            >
               移除
             </button>
           </div>
         ))}
+        {files.length > 0 ? (
+          <div className="progress">
+            <span style={{ width: `${Math.round(progress * 100)}%` }} />
+          </div>
+        ) : null}
+        {error ? <div className="error">{error}</div> : null}
+        <BundleState result={result} onChoose={choose} />
         <div className="actions">
-          <button className="btn-primary" disabled={running || pending.length === 0} onClick={start}>
-            {running ? "正在上传…" : `开始上传 ${pending.length} 个文件`}
+          <button className="btn-primary" disabled={running || !pending} onClick={start}>
+            {running ? "正在上传…" : files.length > 1 ? `归档为同一份产物（${files.length} 个文件）` : "开始上传"}
           </button>
         </div>
       </div>
@@ -168,30 +168,29 @@ export function UploadPage() {
   )
 }
 
-function FileState({
-  item,
+function BundleState({
+  result,
   onChoose,
 }: {
-  item: QueuedFile
-  onChoose: (item: QueuedFile, decision: "new_artifact" | "new_version", artifactId?: string) => void
+  result: IngestResult | null
+  onChoose: (decision: "new_artifact" | "new_version", artifactId?: string) => void
 }) {
-  if (item.error) return <div className="error">{item.error}</div>
-  if (!item.result) return <div className="muted">等待上传</div>
-  if (item.result.status === "needs_decision") {
+  if (!result) return null
+  if (result.status === "needs_decision") {
     return (
       <div className="notice">
-        <div>{item.result.message}</div>
+        <div>{result.message}</div>
         <div className="choice">
-          <button className="btn-ghost" onClick={() => onChoose(item, "new_artifact")}>
+          <button className="btn-ghost" onClick={() => onChoose("new_artifact")}>
             创建新产物
           </button>
         </div>
-        {(item.result.candidates || []).map((candidate) => (
+        {(result.candidates || []).map((candidate) => (
           <div className="choice" key={candidate.artifact_id}>
             <span>
               {candidate.title}（v{candidate.versions.join(", ")}）
             </span>
-            <button className="btn-ghost" onClick={() => onChoose(item, "new_version", candidate.artifact_id)}>
+            <button className="btn-ghost" onClick={() => onChoose("new_version", candidate.artifact_id)}>
               追加为新版本
             </button>
           </div>
@@ -199,14 +198,16 @@ function FileState({
       </div>
     )
   }
-  if (item.result.id) {
+  if (result.id) {
+    const count = result.current_version?.file_count || 0
     return (
       <div>
-        {item.result.message || "已归档"}{" "}
-        <Link to={`/artifacts/${item.result.id}`}>查看产物</Link>
-        {item.result.stored_new_blob === false ? <span className="muted"> · 已复用相同内容</span> : null}
+        {result.message || "已归档"}{" "}
+        <Link to={`/artifacts/${result.id}`}>查看产物</Link>
+        {count > 1 ? <span className="muted"> · {count} 个文件</span> : null}
+        {result.stored_new_blob === false ? <span className="muted"> · 已复用相同内容</span> : null}
       </div>
     )
   }
-  return <div>{item.result.message || item.result.status}</div>
+  return <div>{result.message || result.status}</div>
 }

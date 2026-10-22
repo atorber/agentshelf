@@ -92,7 +92,8 @@ def create_app(settings: Settings | None = None, *, testing: bool = False, embed
 
     @app.post("/api/ingest", dependencies=[Depends(require_token)])
     async def ingest(
-        file: UploadFile = File(...),
+        file: UploadFile | None = File(None),
+        files: list[UploadFile] | None = File(None),
         title: str = Form(""),
         description: str = Form(""),
         project: str = Form(""),
@@ -101,21 +102,28 @@ def create_app(settings: Settings | None = None, *, testing: bool = False, embed
         decision: str = Form(""),
         artifact_id: str = Form(""),
     ):
-        filename = safe_filename(file.filename or "")
-        staging, sha256, size_bytes = await _save_upload(file, resolved.staging_dir, resolved.max_upload_bytes)
-        result = library.ingest_file(
-            staging,
-            sha256,
-            size_bytes,
-            filename,
-            title=title,
-            description=description,
-            project=project,
-            tags=tags,
-            source_agent=source_agent,
-            decision=decision,
-            artifact_id=artifact_id or None,
-        )
+        selected = [item for item in [file, *(files or [])] if item is not None and (item.filename or "").strip()]
+        if not selected:
+            raise HTTPException(status_code=400, detail="请选择文件")
+        staged: list[tuple[Path, str, int, str]] = []
+        for item in selected:
+            filename = safe_filename(item.filename or "")
+            staging, sha256, size_bytes = await _save_upload(item, resolved.staging_dir, resolved.max_upload_bytes)
+            staged.append((staging, sha256, size_bytes, filename))
+        fields = {
+            "title": title,
+            "description": description,
+            "project": project,
+            "tags": tags,
+            "source_agent": source_agent,
+            "decision": decision,
+            "artifact_id": artifact_id or None,
+        }
+        if len(staged) == 1:
+            staging, sha256, size_bytes, filename = staged[0]
+            result = library.ingest_file(staging, sha256, size_bytes, filename, **fields)
+        else:
+            result = library.ingest_bundle(staged, **fields)
         return _outcome(result)
 
     @app.post("/api/ingest/confirm", dependencies=[Depends(require_token)])
@@ -187,12 +195,12 @@ def create_app(settings: Settings | None = None, *, testing: bool = False, embed
         return library.restore_version(artifact_id, version_id)
 
     @app.get("/api/artifacts/{artifact_id}/preview", dependencies=[Depends(require_token)])
-    def preview(artifact_id: str, version_id: str | None = None):
-        return library.preview(artifact_id, version_id)
+    def preview(artifact_id: str, version_id: str | None = None, file_id: str | None = None):
+        return library.preview(artifact_id, version_id, file_id)
 
     @app.get("/api/artifacts/{artifact_id}/download", dependencies=[Depends(require_token)])
-    def download(artifact_id: str, version_id: str | None = None):
-        path, version = library.locate_download(artifact_id, version_id)
+    def download(artifact_id: str, version_id: str | None = None, file_id: str | None = None):
+        path, version = library.locate_download(artifact_id, version_id, file_id)
         filename = quote(version["original_filename"])
         return FileResponse(
             path,
@@ -206,8 +214,8 @@ def create_app(settings: Settings | None = None, *, testing: bool = False, embed
         )
 
     @app.get("/api/artifacts/{artifact_id}/verify", dependencies=[Depends(require_token)])
-    def verify(artifact_id: str, version_id: str | None = None):
-        return library.verify_file(artifact_id, version_id)
+    def verify(artifact_id: str, version_id: str | None = None, file_id: str | None = None):
+        return library.verify_file(artifact_id, version_id, file_id)
 
     @app.get("/api/projects", dependencies=[Depends(require_token)])
     def list_projects():

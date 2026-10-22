@@ -57,6 +57,9 @@ def _print_human(body: dict, status_code: int) -> None:
         typer.echo(f"编号: {body.get('id')}")
         if version:
             typer.echo(f"当前版本: v{version}")
+        count = (body.get("current_version") or {}).get("file_count") or 0
+        if count > 1:
+            typer.echo(f"文件: {count} 个")
         sha = (body.get("current_version") or {}).get("sha256")
         if sha:
             typer.echo(f"SHA-256: {sha}")
@@ -99,7 +102,7 @@ def status() -> None:
 
 @app.command()
 def archive(
-    file: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
+    files: list[Path] = typer.Argument(..., exists=True, dir_okay=False, readable=True),
     title: str = typer.Option("", help="产物名称"),
     description: str = typer.Option("", help="描述"),
     project: str = typer.Option("", help="项目"),
@@ -109,7 +112,7 @@ def archive(
     new_artifact: bool = typer.Option(False, "--new-artifact", help="即使内容已存在，也创建新产物"),
     as_json: bool = typer.Option(False, "--json", help="输出 JSON"),
 ) -> None:
-    """通过本地服务归档一个最终产物。"""
+    """通过本地服务归档一个最终产物。多个文件会放进同一份产物。"""
     decision = ""
     if new_artifact and artifact_id:
         typer.echo("不能同时指定 --new-artifact 和 --artifact-id")
@@ -118,7 +121,9 @@ def archive(
         decision = "new_artifact"
     elif artifact_id:
         decision = "new_version"
-    with file.open("rb") as handle:
+    handles = [path.open("rb") for path in files]
+    try:
+        payload = [("files", (path.name, handle, "application/octet-stream")) for path, handle in zip(files, handles, strict=True)]
         with _client() as client:
             response = client.post(
                 "/api/ingest",
@@ -131,8 +136,11 @@ def archive(
                     "decision": decision,
                     "artifact_id": artifact_id,
                 },
-                files={"file": (file.name, handle, "application/octet-stream")},
+                files=payload,
             )
+    finally:
+        for handle in handles:
+            handle.close()
     _print_result(response, as_json)
 
 

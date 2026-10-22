@@ -1,0 +1,65 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  launcher:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15-intel, ubuntu-22.04, ubuntu-24.04-arm, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install backend and packager
+        run: python -m pip install . pyinstaller
+
+      - name: Build the local UI
+        working-directory: apps/desktop
+        run: npm ci && npm run build
+
+      - name: Build the launcher binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AGENTSHELF_LAUNCHER_NAME="$(python -c 'import platform; from agentshelf.release_assets import launcher_stem; print(launcher_stem(platform.system(), platform.machine()))')"
+          python -m PyInstaller packaging/agentshelf-launcher.spec --noconfirm --distpath dist --workpath build/launcher
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            bin="dist/${AGENTSHELF_LAUNCHER_NAME}.exe"
+          else
+            bin="dist/${AGENTSHELF_LAUNCHER_NAME}"
+            chmod 755 "${bin}"
+          fi
+          if [ "${RUNNER_OS}" = "macOS" ]; then
+            codesign --force --sign - "${bin}"
+          fi
+          BIN="${bin}" python -c 'import hashlib, os, pathlib; source = pathlib.Path(os.environ["BIN"]); digest = hashlib.sha256(source.read_bytes()).hexdigest(); pathlib.Path(str(source) + ".sha256").write_text(digest + "\n", encoding="utf-8")'
+          echo "bin=${bin}" >> "${GITHUB_OUTPUT}"
+        id: built
+
+      - name: Upload to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          bin="${{ steps.built.outputs.bin }}"
+          gh release upload "${TAG}" "${bin}" "${bin}.sha256" --clobber

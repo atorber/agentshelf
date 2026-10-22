@@ -1,22 +1,23 @@
 import { Component, useEffect, useState, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown"
-import { fetchVerifiedBlob, preview } from "../api"
+import { artifactQuery, fetchVerifiedBlob, preview } from "../api"
 import type { Preview } from "../types"
 
 interface Props {
   artifactId: string
   versionId?: string
+  fileId?: string
 }
 
-export function PreviewPane({ artifactId, versionId }: Props) {
+export function PreviewPane({ artifactId, versionId, fileId }: Props) {
   return (
-    <PreviewBoundary key={`${artifactId}:${versionId || "current"}`}>
-      <PreviewBody artifactId={artifactId} versionId={versionId} />
+    <PreviewBoundary key={`${artifactId}:${versionId || "current"}:${fileId || "first"}`}>
+      <PreviewBody artifactId={artifactId} versionId={versionId} fileId={fileId} />
     </PreviewBoundary>
   )
 }
 
-function PreviewBody({ artifactId, versionId }: Props) {
+function PreviewBody({ artifactId, versionId, fileId }: Props) {
   const [data, setData] = useState<Preview | null>(null)
   const [error, setError] = useState("")
   const [imageUrl, setImageUrl] = useState("")
@@ -28,7 +29,7 @@ function PreviewBody({ artifactId, versionId }: Props) {
     setError("")
     setImageUrl("")
     setPdfError("")
-    preview(artifactId, versionId)
+    preview(artifactId, versionId, fileId)
       .then((body) => {
         if (!cancelled) setData(body)
       })
@@ -38,14 +39,13 @@ function PreviewBody({ artifactId, versionId }: Props) {
     return () => {
       cancelled = true
     }
-  }, [artifactId, versionId])
+  }, [artifactId, fileId, versionId])
 
   useEffect(() => {
     if (!data || data.preview_kind !== "image") return
     let url = ""
     let cancelled = false
-    const query = versionId ? `?version_id=${encodeURIComponent(versionId)}` : ""
-    fetchVerifiedBlob(`/api/artifacts/${artifactId}/download${query}`)
+    fetchVerifiedBlob(`/api/artifacts/${artifactId}/download${artifactQuery(versionId, fileId)}`)
       .then((file) => {
         if (cancelled) return
         if (!file.verified) {
@@ -62,7 +62,7 @@ function PreviewBody({ artifactId, versionId }: Props) {
       cancelled = true
       if (url) URL.revokeObjectURL(url)
     }
-  }, [artifactId, data, versionId])
+  }, [artifactId, data, fileId, versionId])
 
   if (error) return <div className="preview-frame error">{error}</div>
   if (!data) return <div className="preview-frame muted">正在准备预览…</div>
@@ -117,14 +117,14 @@ function PreviewBody({ artifactId, versionId }: Props) {
       <div className="preview-frame">
         {data.error ? <p className="error">{data.error}</p> : null}
         {typeof data.page_count === "number" ? <p className="muted">共 {data.page_count} 页</p> : null}
-        {pdfError ? <p className="error">{pdfError}</p> : <PdfPages artifactId={artifactId} versionId={versionId} onError={setPdfError} />}
+        {pdfError ? <p className="error">{pdfError}</p> : <PdfPages artifactId={artifactId} versionId={versionId} fileId={fileId} onError={setPdfError} />}
       </div>
     )
   }
   return <div className="preview-frame">此格式暂不支持直接预览，可以使用右侧的下载获取原始文件。</div>
 }
 
-function PdfPages({ artifactId, versionId, onError }: Props & { onError: (message: string) => void }) {
+function PdfPages({ artifactId, versionId, fileId, onError }: Props & { onError: (message: string) => void }) {
   const [urls, setUrls] = useState<string[]>([])
   useEffect(() => {
     let cancelled = false
@@ -134,8 +134,7 @@ function PdfPages({ artifactId, versionId, onError }: Props & { onError: (messag
         const pdfjs = await import("pdfjs-dist")
         const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url")
         pdfjs.GlobalWorkerOptions.workerSrc = worker.default
-        const query = versionId ? `?version_id=${encodeURIComponent(versionId)}` : ""
-        const file = await fetchVerifiedBlob(`/api/artifacts/${artifactId}/download${query}`)
+        const file = await fetchVerifiedBlob(`/api/artifacts/${artifactId}/download${artifactQuery(versionId, fileId)}`)
         if (!file.verified) throw new Error("哈希校验失败")
         const doc = await pdfjs.getDocument({ data: await file.blob.arrayBuffer(), isEvalSupported: false }).promise
         const total = Math.min(doc.numPages, 8)
@@ -159,7 +158,7 @@ function PdfPages({ artifactId, versionId, onError }: Props & { onError: (messag
     return () => {
       cancelled = true
     }
-  }, [artifactId, onError, versionId])
+  }, [artifactId, fileId, onError, versionId])
   return (
     <div className="stack">
       {urls.map((url) => (

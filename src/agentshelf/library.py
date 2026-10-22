@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import os
 import re
 import uuid
 from datetime import datetime, timezone
@@ -220,6 +222,18 @@ class Library:
         decision = _clean_decision(decision)
         if decision not in {"new_artifact", "new_version"}:
             raise LibraryError(400, "请明确选择创建新产物或追加版本")
+        manifest = _bundle_manifest_path(self.settings.staging_dir, sha256)
+        if manifest.is_file():
+            return self._finalize_bundle(
+                _read_bundle_manifest(manifest),
+                decision=decision,
+                artifact_id=artifact_id,
+                title=title,
+                description=description,
+                project=project,
+                tags=tags,
+                source_agent=source_agent,
+            )
         staging = self.settings.staging_dir / sha256
         if not staging.is_file():
             raise LibraryError(404, "暂存文件不存在或已过期")
@@ -230,6 +244,69 @@ class Library:
             sha256,
             staging.stat().st_size,
             resolved_name,
+            decision=decision,
+            artifact_id=artifact_id,
+            title=title,
+            description=description,
+            project=project,
+            tags=tags,
+            source_agent=source_agent,
+        )
+
+    def ingest_bundle(
+        self,
+        staged: list[tuple[Path, str, int, str]],
+        *,
+        title: str = "",
+        description: str = "",
+        project: str = "",
+        tags: str = "",
+        source_agent: str = "",
+        decision: str | None = None,
+        artifact_id: str | None = None,
+    ) -> dict:
+        if len(staged) == 1:
+            path, sha256, size_bytes, filename = staged[0]
+            return self.ingest_file(
+                path,
+                sha256,
+                size_bytes,
+                filename,
+                title=title,
+                description=description,
+                project=project,
+                tags=tags,
+                source_agent=source_agent,
+                decision=decision,
+                artifact_id=artifact_id,
+            )
+        self.require_available()
+        decision = _clean_decision(decision)
+        if decision == "new_version" and not (artifact_id or "").strip():
+            raise LibraryError(400, "追加为新版本时必须指定产物")
+        files = [
+            {"path": path, "sha256": sha256, "size_bytes": size_bytes, "filename": safe_filename(filename)}
+            for path, sha256, size_bytes, filename in staged
+        ]
+        signature = _bundle_signature([item["sha256"] for item in files])
+        with db_session(self.settings.db_path) as conn:
+            candidates = _candidates_for_signature(conn, [item["sha256"] for item in files])
+        if decision is None and candidates:
+            _write_bundle_manifest(self.settings.staging_dir, signature, files)
+            return {
+                "status": "needs_decision",
+                "staging_id": signature,
+                "sha256": signature,
+                "filename": files[0]["filename"],
+                "size_bytes": sum(item["size_bytes"] for item in files),
+                "stored_new_blob": False,
+                "message": "相同的一组文件已存在。请明确选择创建新产物，或追加为某个产物的新版本。",
+                "candidates": candidates,
+            }
+        if decision is None:
+            decision = "new_artifact"
+        return self._finalize_bundle(
+            files,
             decision=decision,
             artifact_id=artifact_id,
             title=title,
@@ -323,14 +400,27 @@ class Library:
                 "SELECT id, file_object_id FROM artifact_versions WHERE artifact_id = ?",
                 (artifact["id"],),
             ).fetchall()
+            file_ids = [
+                int(row["file_object_id"])
+                for row in conn.execute(
+                    """
+                    SELECT vf.file_object_id
+                    FROM version_files vf
+                    JOIN artifact_versions v ON v.id = vf.version_id
+                    WHERE v.artifact_id = ?
+                    """,
+                    (artifact["id"],),
+                ).fetchall()
+            ]
+            file_ids.extend(int(version["file_object_id"]) for version in versions)
             for version in versions:
                 conn.execute("DELETE FROM artifact_fts WHERE version_id = ?", (str(version["id"]),))
                 conn.execute("DELETE FROM embeddings WHERE version_id = ?", (version["id"],))
             conn.execute("DELETE FROM artifact_versions WHERE artifact_id = ?", (artifact["id"],))
             conn.execute("DELETE FROM artifact_tags WHERE artifact_id = ?", (artifact["id"],))
             conn.execute("DELETE FROM artifacts WHERE id = ?", (artifact["id"],))
-            for version in versions:
-                relative = _gc_file_object(conn, int(version["file_object_id"]))
+            for file_id in dict.fromkeys(file_ids):
+                relative = _gc_file_object(conn, file_id)
                 if relative:
                     removed.append(relative)
         for relative in removed:
@@ -349,7 +439,7 @@ class Library:
                 (artifact["id"],),
             ).fetchall()
             current_id = artifact["current_version_id"]
-        return [_version_dto(row, current_id) for row in rows]
+            return [_version_dto(row, current_id, _files_for_version(conn, int(row["id"]))) for row in rows]
 
     def restore_version(self, public_id: str, version_public_id: str) -> dict:
         self.require_available()
@@ -365,7 +455,7 @@ class Library:
                 "SELECT * FROM artifact_versions WHERE id = ?",
                 (artifact["current_version_id"],),
             ).fetchone()
-            if current is not None and current["sha256"] == version["sha256"]:
+            if current is not None and _version_signature(conn, int(current["id"])) == _version_signature(conn, int(version["id"])):
                 detail = _artifact_detail(conn, public_id)
                 detail["status"] = "already_current"
                 detail["message"] = "当前内容已与该版本一致"
@@ -382,6 +472,7 @@ class Library:
                 note=f"恢复自 v{version['version_number']}",
                 extracted_text=version["extracted_text"],
                 extract_status=version["extract_status"] or "done",
+                members=_members_of(conn, int(version["id"])),
             )
             _touch_artifact(conn, int(artifact["id"]), int(created["id"]))
             _reindex_version(conn, int(created["id"]))
@@ -391,8 +482,8 @@ class Library:
         detail["status"] = "restored"
         return detail
 
-    def preview(self, public_id: str, version_public_id: str | None = None) -> dict:
-        version, path = self._locate_file(public_id, version_public_id)
+    def preview(self, public_id: str, version_public_id: str | None = None, file_public_id: str | None = None) -> dict:
+        version, path = self._locate_file(public_id, version_public_id, file_public_id)
         kind = version["preview_kind"]
         try:
             payload = preview_payload(path, kind)
@@ -403,6 +494,7 @@ class Library:
         return {
             "artifact_id": public_id,
             "version_id": version["public_id"],
+            "file_id": version.get("file_id") or "",
             "version_number": version["version_number"],
             "filename": version["original_filename"],
             "mime_type": version["mime_type"],
@@ -412,12 +504,12 @@ class Library:
             **payload,
         }
 
-    def locate_download(self, public_id: str, version_public_id: str | None = None) -> tuple[Path, dict]:
-        version, path = self._locate_file(public_id, version_public_id)
+    def locate_download(self, public_id: str, version_public_id: str | None = None, file_public_id: str | None = None) -> tuple[Path, dict]:
+        version, path = self._locate_file(public_id, version_public_id, file_public_id)
         return path, version
 
-    def verify_file(self, public_id: str, version_public_id: str | None = None) -> dict:
-        version, path = self._locate_file(public_id, version_public_id)
+    def verify_file(self, public_id: str, version_public_id: str | None = None, file_public_id: str | None = None) -> dict:
+        version, path = self._locate_file(public_id, version_public_id, file_public_id)
         actual = sha256_file(path)
         return {
             "ok": actual == version["sha256"],
@@ -425,6 +517,7 @@ class Library:
             "actual": actual,
             "size_bytes": path.stat().st_size,
             "version_id": version["public_id"],
+            "file_id": version.get("file_id") or "",
         }
 
     def list_projects(self) -> list[dict]:
@@ -722,25 +815,41 @@ class Library:
         with db_session(self.settings.db_path) as conn:
             row = conn.execute(
                 """
-                SELECT v.id, v.preview_kind, v.original_filename, a.title, f.relative_path
+                SELECT v.id, a.title
                 FROM artifact_versions v
                 JOIN artifacts a ON a.id = v.artifact_id
-                JOIN file_objects f ON f.id = v.file_object_id
                 WHERE v.id = ?
                 """,
                 (version_pk,),
             ).fetchone()
+            members = _members_of(conn, version_pk) if row is not None else []
         if row is None:
             return
-        path = self.settings.objects_dir / row["relative_path"]
-        if not path.is_file():
+        if not members:
             with db_session(self.settings.db_path, write=True) as conn:
                 conn.execute(
                     "UPDATE artifact_versions SET extract_status = 'failed', extract_error = ? WHERE id = ?",
                     ("原始文件缺失", version_pk),
                 )
             return
-        text, status, error = extract_text(path, row["preview_kind"])
+        extracted: list[tuple[int, str, str, str]] = []
+        parts: list[str] = []
+        for member in members:
+            path = self.settings.objects_dir / member["relative_path"]
+            if not path.is_file():
+                extracted.append((int(member["id"]), "", "failed", "原始文件缺失"))
+                continue
+            text, status, error = extract_text(path, member["preview_kind"])
+            extracted.append((int(member["id"]), text, status, error))
+            if text:
+                parts.append(f"{member['filename']}\n{text}")
+        text = "\n\n".join(parts)
+        if any(item[2] == "failed" for item in extracted):
+            status, error = "failed", next(item[3] for item in extracted if item[2] == "failed")
+        elif any(item[2] == "pending" for item in extracted):
+            status, error = "pending", ""
+        else:
+            status, error = "done", ""
         vector = None
         model_type = ""
         semantic_error = ""
@@ -754,6 +863,15 @@ class Library:
                 semantic_error = str(exc)[:300]
                 logger.warning("semantic index skipped: %s", semantic_error)
         with db_session(self.settings.db_path, write=True) as conn:
+            for file_pk, file_text, file_status, file_error in extracted:
+                conn.execute(
+                    """
+                    UPDATE version_files
+                    SET extracted_text = ?, extract_status = ?, extract_error = ?
+                    WHERE id = ?
+                    """,
+                    (file_text, file_status, file_error, file_pk),
+                )
             conn.execute(
                 """
                 UPDATE artifact_versions
@@ -928,6 +1046,123 @@ class Library:
         detail["message"] = "已创建新产物" if status == "created" else "已追加新版本"
         return detail
 
+    def _finalize_bundle(
+        self,
+        files: list[dict],
+        *,
+        decision: str,
+        artifact_id: str | None,
+        title: str,
+        description: str,
+        project: str,
+        tags: str,
+        source_agent: str,
+    ) -> dict:
+        signature = _bundle_signature([item["sha256"] for item in files])
+        if decision == "new_version":
+            with db_session(self.settings.db_path) as conn:
+                artifact = _require_artifact(conn, (artifact_id or "").strip())
+                duplicate = _version_with_signature(conn, int(artifact["id"]), [item["sha256"] for item in files])
+            if duplicate is not None:
+                self._discard_staged(files, signature)
+                detail = self.get_artifact(artifact["public_id"])
+                detail["status"] = "duplicate_version"
+                detail["stored_new_blob"] = False
+                detail["message"] = f"该产物已包含相同的一组文件（v{duplicate['version_number']}），未重复保存。"
+                return detail
+        prepared: list[dict] = []
+        for item in files:
+            path = Path(item["path"]) if item.get("path") else self.settings.staging_dir / item["sha256"]
+            head = path.read_bytes()[:64] if path.is_file() else b""
+            kind = sniff_preview_kind(path, item["filename"], "")
+            prepared.append(
+                {
+                    **item,
+                    "path": path,
+                    "preview_kind": kind,
+                    "mime": guess_mime(item["filename"], kind, head),
+                }
+            )
+        stored_new = False
+        for item in prepared:
+            _path, created = commit_blob(item["path"], self.settings.objects_dir, item["sha256"])
+            stored_new = stored_new or created
+        _bundle_manifest_path(self.settings.staging_dir, signature).unlink(missing_ok=True)
+        for item in prepared:
+            _meta_path(self.settings.staging_dir, item["sha256"]).unlink(missing_ok=True)
+        tag_list = parse_tags(tags)
+        first = prepared[0]
+        resolved_title = title.strip() or Path(first["filename"]).stem or first["filename"]
+        with db_session(self.settings.db_path, write=True) as conn:
+            members = []
+            for item in prepared:
+                file_id, _stored = _ensure_file_object(
+                    conn,
+                    item["sha256"],
+                    int(item["size_bytes"]),
+                    item["mime"],
+                    relative_object_path(item["sha256"]),
+                )
+                members.append(
+                    {
+                        "file_object_id": file_id,
+                        "filename": item["filename"],
+                        "mime": item["mime"],
+                        "size_bytes": int(item["size_bytes"]),
+                        "sha256": item["sha256"],
+                        "preview_kind": item["preview_kind"],
+                        "relative_path": relative_object_path(item["sha256"]),
+                    }
+                )
+            primary = members[0]
+            if decision == "new_version":
+                artifact = _require_artifact(conn, (artifact_id or "").strip())
+                artifact_pk = int(artifact["id"])
+                if title.strip() or description.strip() or project.strip() or tag_list or source_agent.strip():
+                    _apply_metadata(
+                        conn,
+                        artifact_pk,
+                        resolved_title if title.strip() else None,
+                        description,
+                        project,
+                        source_agent,
+                        tag_list if tags.strip() else None,
+                    )
+                public_id = artifact["public_id"]
+                status = "version_created"
+            else:
+                artifact_pk, public_id = _insert_artifact(conn, resolved_title, description.strip(), project, source_agent)
+                _replace_tags(conn, artifact_pk, tag_list)
+                status = "created"
+            created = _insert_version(
+                conn,
+                artifact_pk=artifact_pk,
+                file_object_id=int(primary["file_object_id"]),
+                filename=primary["filename"],
+                mime=primary["mime"],
+                size_bytes=int(primary["size_bytes"]),
+                sha256=primary["sha256"],
+                preview_kind=primary["preview_kind"],
+                members=members,
+            )
+            _touch_artifact(conn, artifact_pk, int(created["id"]))
+            _reindex_version(conn, int(created["id"]))
+            _enqueue(conn, int(created["id"]))
+        self._drain_if_sync()
+        detail = self.get_artifact(public_id)
+        detail["status"] = status
+        detail["stored_new_blob"] = stored_new
+        count = len(prepared)
+        detail["message"] = f"已创建新产物，包含 {count} 个文件" if status == "created" else f"已追加新版本，包含 {count} 个文件"
+        return detail
+
+    def _discard_staged(self, files: list[dict], signature: str) -> None:
+        for item in files:
+            path = Path(item["path"]) if item.get("path") else self.settings.staging_dir / item["sha256"]
+            path.unlink(missing_ok=True)
+            _meta_path(self.settings.staging_dir, item["sha256"]).unlink(missing_ok=True)
+        _bundle_manifest_path(self.settings.staging_dir, signature).unlink(missing_ok=True)
+
     def _keyword_query(self, query: str, project: str, tag: str, source: str, kind: str, limit: int, offset: int) -> dict:
         match = fts_match_query(query) if self.tokenizer == "trigram" else fts_match_query(query)
         if match and self.tokenizer == "unicode61":
@@ -981,6 +1216,10 @@ class Library:
             text_clause = """(
                 a.title LIKE ? ESCAPE '\\' OR a.description LIKE ? ESCAPE '\\'
                 OR v.original_filename LIKE ? ESCAPE '\\' OR v.extracted_text LIKE ? ESCAPE '\\'
+                OR EXISTS (
+                    SELECT 1 FROM version_files vf
+                    WHERE vf.version_id = v.id AND vf.original_filename LIKE ? ESCAPE '\\'
+                )
             )"""
             where = " AND ".join([text_clause] + clauses)
             sql = f"""
@@ -997,7 +1236,7 @@ class Library:
                 ORDER BY a.updated_at DESC
                 LIMIT ? OFFSET ?
             """
-            rows = conn.execute(sql, [pattern, pattern, pattern, pattern, *params, limit, offset]).fetchall()
+            rows = conn.execute(sql, [pattern, pattern, pattern, pattern, pattern, *params, limit, offset]).fetchall()
             total = conn.execute(
                 f"""
                 SELECT COUNT(*) AS n
@@ -1007,7 +1246,7 @@ class Library:
                 LEFT JOIN source_agents s ON s.id = a.source_agent_id
                 WHERE {where}
                 """,
-                [pattern, pattern, pattern, pattern, *params],
+                [pattern, pattern, pattern, pattern, pattern, *params],
             ).fetchone()["n"]
             items = []
             for row in rows:
@@ -1076,7 +1315,17 @@ class Library:
                 if source and (row["source_name"] or "").casefold() != source.casefold():
                     continue
                 if kind and row["preview_kind"] != kind:
-                    continue
+                    matched = conn.execute(
+                        """
+                        SELECT 1
+                        FROM version_files vf
+                        JOIN artifact_versions versions ON versions.id = vf.version_id
+                        WHERE versions.public_id = ? AND vf.preview_kind = ?
+                        """,
+                        (row["version_id"], kind),
+                    ).fetchone()
+                    if matched is None:
+                        continue
                 if tag:
                     names = _tag_names(conn, row["artifact_pk"])
                     if tag.casefold() not in {name.casefold() for name in names}:
@@ -1089,7 +1338,7 @@ class Library:
                     break
         return items
 
-    def _locate_file(self, public_id: str, version_public_id: str | None) -> tuple[dict, Path]:
+    def _locate_file(self, public_id: str, version_public_id: str | None, file_public_id: str | None = None) -> tuple[dict, Path]:
         with db_session(self.settings.db_path) as conn:
             artifact = _require_artifact(conn, public_id)
             if version_public_id:
@@ -1102,12 +1351,41 @@ class Library:
                     "SELECT * FROM artifact_versions WHERE id = ?",
                     (artifact["current_version_id"],),
                 ).fetchone()
+            chosen = None
+            if version is not None:
+                if file_public_id:
+                    chosen = conn.execute(
+                        "SELECT * FROM version_files WHERE public_id = ? AND version_id = ?",
+                        (file_public_id, version["id"]),
+                    ).fetchone()
+                else:
+                    chosen = conn.execute(
+                        "SELECT * FROM version_files WHERE version_id = ? ORDER BY position, id LIMIT 1",
+                        (version["id"],),
+                    ).fetchone()
         if version is None:
             raise LibraryError(404, "版本不存在")
-        path = self.settings.objects_dir / relative_object_path(version["sha256"])
+        if file_public_id and chosen is None:
+            raise LibraryError(404, "文件不存在")
+        sha256 = chosen["sha256"] if chosen is not None else version["sha256"]
+        filename = chosen["original_filename"] if chosen is not None else version["original_filename"]
+        preview_kind = chosen["preview_kind"] if chosen is not None else version["preview_kind"]
+        mime_type = chosen["mime_type"] if chosen is not None else version["mime_type"]
+        size_bytes = chosen["size_bytes"] if chosen is not None else version["size_bytes"]
+        path = self.settings.objects_dir / relative_object_path(sha256)
         if not path.is_file():
             raise LibraryError(404, "原始文件缺失")
-        return version, path
+        located = {
+            "public_id": version["public_id"],
+            "file_id": chosen["public_id"] if chosen is not None else "",
+            "version_number": version["version_number"],
+            "original_filename": filename,
+            "preview_kind": preview_kind,
+            "mime_type": mime_type,
+            "size_bytes": size_bytes,
+            "sha256": sha256,
+        }
+        return located, path
 
     def _project_by_public_id(self, public_id: str) -> dict:
         with db_session(self.settings.db_path) as conn:
@@ -1223,10 +1501,11 @@ def _candidates_for_hash(conn, sha256: str) -> list[dict]:
     rows = conn.execute(
         """
         SELECT a.public_id AS artifact_id, a.title, v.version_number, v.public_id AS version_id,
-               v.original_filename AS filename
-        FROM artifact_versions v
+               vf.original_filename AS filename
+        FROM version_files vf
+        JOIN artifact_versions v ON v.id = vf.version_id
         JOIN artifacts a ON a.id = v.artifact_id
-        WHERE v.sha256 = ?
+        WHERE vf.sha256 = ?
         ORDER BY a.updated_at DESC, v.version_number DESC
         """,
         (sha256,),
@@ -1242,7 +1521,8 @@ def _candidates_for_hash(conn, sha256: str) -> list[dict]:
                 "versions": [],
             }
             grouped[row["artifact_id"]] = item
-        item["versions"].append(row["version_number"])
+        if row["version_number"] not in item["versions"]:
+            item["versions"].append(row["version_number"])
     return list(grouped.values())
 
 
@@ -1339,7 +1619,23 @@ def _insert_version(
     note: str = "",
     extracted_text: str = "",
     extract_status: str = "pending",
+    members: list[dict] | None = None,
 ) -> dict:
+    if not members:
+        members = [
+            {
+                "file_object_id": file_object_id,
+                "filename": filename,
+                "mime": mime,
+                "size_bytes": size_bytes,
+                "sha256": sha256,
+                "preview_kind": preview_kind,
+                "extracted_text": "",
+                "extract_status": "pending",
+                "extract_error": "",
+            }
+        ]
+    first = members[0]
     number_row = conn.execute(
         "SELECT COALESCE(MAX(version_number), 0) AS n FROM artifact_versions WHERE artifact_id = ?",
         (artifact_pk,),
@@ -1357,19 +1653,43 @@ def _insert_version(
             public_id,
             artifact_pk,
             number,
-            file_object_id,
-            filename,
-            mime,
-            size_bytes,
-            sha256,
+            int(first["file_object_id"]),
+            first["filename"],
+            first["mime"],
+            int(first["size_bytes"]),
+            first["sha256"],
             note,
-            preview_kind,
+            first["preview_kind"],
             extracted_text,
             extract_status,
             now_iso(),
         ),
     )
-    return {"id": int(cur.lastrowid), "public_id": public_id, "version_number": number}
+    version_pk = int(cur.lastrowid)
+    for position, member in enumerate(members):
+        conn.execute(
+            """
+            INSERT INTO version_files(
+              public_id, version_id, position, file_object_id, original_filename, mime_type,
+              size_bytes, sha256, preview_kind, extracted_text, extract_status, extract_error
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                version_pk,
+                position,
+                int(member["file_object_id"]),
+                member["filename"],
+                member["mime"],
+                int(member["size_bytes"]),
+                member["sha256"],
+                member["preview_kind"],
+                member.get("extracted_text") or "",
+                member.get("extract_status") or "pending",
+                member.get("extract_error") or "",
+            ),
+        )
+    return {"id": version_pk, "public_id": public_id, "version_number": number}
 
 
 def _touch_artifact(conn, artifact_pk: int, version_pk: int) -> None:
@@ -1433,6 +1753,14 @@ def _reindex_version(conn, version_pk: int) -> None:
     if row is None:
         return
     tags = " ".join(_tag_names_by_pk(conn, int(row["artifact_id"])))
+    filenames = [
+        item["original_filename"]
+        for item in conn.execute(
+            "SELECT original_filename FROM version_files WHERE version_id = ? ORDER BY position, id",
+            (version_pk,),
+        ).fetchall()
+    ]
+    filename = " ".join(filenames) or row["original_filename"] or ""
     conn.execute("DELETE FROM artifact_fts WHERE version_id = ?", (str(version_pk),))
     conn.execute(
         """
@@ -1444,7 +1772,7 @@ def _reindex_version(conn, version_pk: int) -> None:
             str(row["artifact_id"]),
             row["title"] or "",
             row["description"] or "",
-            row["original_filename"] or "",
+            filename,
             row["extracted_text"] or "",
             tags,
             row["project_name"] or "",
@@ -1471,11 +1799,15 @@ def _tag_names(conn, artifact_pk: int) -> list[str]:
 
 
 def _gc_file_object(conn, file_object_id: int) -> str | None:
-    row = conn.execute(
+    versions = conn.execute(
         "SELECT COUNT(*) AS n FROM artifact_versions WHERE file_object_id = ?",
         (file_object_id,),
     ).fetchone()
-    if int(row["n"]) > 0:
+    files = conn.execute(
+        "SELECT COUNT(*) AS n FROM version_files WHERE file_object_id = ?",
+        (file_object_id,),
+    ).fetchone()
+    if int(versions["n"]) > 0 or int(files["n"]) > 0:
         return None
     obj = conn.execute("SELECT relative_path FROM file_objects WHERE id = ?", (file_object_id,)).fetchone()
     conn.execute("DELETE FROM file_objects WHERE id = ?", (file_object_id,))
@@ -1494,8 +1826,15 @@ def _filter_clauses(project: str, tag: str, source: str, kind: str) -> tuple[lis
         clauses.append("s.name = ? COLLATE NOCASE")
         params.append(source)
     if kind:
-        clauses.append("v.preview_kind = ?")
-        params.append(kind)
+        clauses.append(
+            """(
+                v.preview_kind = ? OR EXISTS (
+                    SELECT 1 FROM version_files vf
+                    WHERE vf.version_id = v.id AND vf.preview_kind = ?
+                )
+            )"""
+        )
+        params.extend([kind, kind])
     if tag:
         clauses.append(
             """EXISTS (
@@ -1518,6 +1857,16 @@ def _search_row(conn, row, query: str) -> dict:
         body = row["body_snippet"] if "body_snippet" in row.keys() else ""
         title = row["title_snippet"] if "title_snippet" in row.keys() else ""
         snippet = body or title or ""
+    counted = conn.execute(
+        """
+        SELECT COUNT(*) AS n
+        FROM version_files vf
+        JOIN artifact_versions v ON v.id = vf.version_id
+        WHERE v.public_id = ?
+        """,
+        (row["version_id"],),
+    ).fetchone()
+    file_count = int(counted["n"]) if counted else 1
     return {
         "artifact_id": row["artifact_id"],
         "version_id": row["version_id"],
@@ -1533,6 +1882,7 @@ def _search_row(conn, row, query: str) -> dict:
         "tags": _tag_names(conn, int(artifact_pk)) if artifact_pk else [],
         "updated_at": row["updated_at"],
         "is_current": bool(row["is_current"]),
+        "file_count": file_count or 1,
         "snippet": snippet,
     }
 
@@ -1588,12 +1938,15 @@ def _artifact_detail(conn, public_id: str) -> dict:
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "version_count": len(versions),
-        "current_version": None if current is None else _version_dto(current, row["current_version_id"]),
-        "versions": [_version_dto(item, row["current_version_id"]) for item in versions],
+        "current_version": None
+        if current is None
+        else _version_dto(current, row["current_version_id"], _files_for_version(conn, int(current["id"]))),
+        "versions": [_version_dto(item, row["current_version_id"], _files_for_version(conn, int(item["id"]))) for item in versions],
     }
 
 
-def _version_dto(row, current_id: int | None) -> dict:
+def _version_dto(row, current_id: int | None, files: list[dict] | None = None) -> dict:
+    listed = files or []
     return {
         "id": row["public_id"],
         "version_number": row["version_number"],
@@ -1607,7 +1960,135 @@ def _version_dto(row, current_id: int | None) -> dict:
         "extract_error": row["extract_error"],
         "created_at": row["created_at"],
         "is_current": row["id"] == current_id,
+        "file_count": len(listed) or 1,
+        "files": listed,
     }
+
+
+def _file_dto(row) -> dict:
+    return {
+        "id": row["public_id"],
+        "filename": row["original_filename"],
+        "mime_type": row["mime_type"],
+        "size_bytes": row["size_bytes"],
+        "sha256": row["sha256"],
+        "preview_kind": row["preview_kind"],
+        "extract_status": row["extract_status"],
+        "extract_error": row["extract_error"],
+    }
+
+
+def _files_for_version(conn, version_pk: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM version_files WHERE version_id = ? ORDER BY position, id",
+        (version_pk,),
+    ).fetchall()
+    return [_file_dto(row) for row in rows]
+
+
+def _members_of(conn, version_pk: int) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT vf.*, f.relative_path
+        FROM version_files vf
+        JOIN file_objects f ON f.id = vf.file_object_id
+        WHERE vf.version_id = ?
+        ORDER BY vf.position, vf.id
+        """,
+        (version_pk,),
+    ).fetchall()
+    return [
+        {
+            "id": int(row["id"]),
+            "file_object_id": int(row["file_object_id"]),
+            "filename": row["original_filename"],
+            "mime": row["mime_type"],
+            "size_bytes": int(row["size_bytes"]),
+            "sha256": row["sha256"],
+            "preview_kind": row["preview_kind"],
+            "extracted_text": row["extracted_text"],
+            "extract_status": row["extract_status"],
+            "extract_error": row["extract_error"],
+            "relative_path": row["relative_path"],
+        }
+        for row in rows
+    ]
+
+
+def _version_signature(conn, version_pk: int) -> tuple[str, ...]:
+    rows = conn.execute(
+        "SELECT sha256 FROM version_files WHERE version_id = ? ORDER BY sha256",
+        (version_pk,),
+    ).fetchall()
+    if rows:
+        return tuple(row["sha256"] for row in rows)
+    version = conn.execute("SELECT sha256 FROM artifact_versions WHERE id = ?", (version_pk,)).fetchone()
+    if version is None:
+        return ()
+    return (version["sha256"],)
+
+
+def _version_with_signature(conn, artifact_pk: int, shas: list[str]):
+    target = tuple(sorted(shas))
+    versions = conn.execute("SELECT id, version_number FROM artifact_versions WHERE artifact_id = ?", (artifact_pk,)).fetchall()
+    for version in versions:
+        if _version_signature(conn, int(version["id"])) == target:
+            return version
+    return None
+
+
+def _bundle_signature(shas: list[str]) -> str:
+    return hashlib.sha256("\n".join(sorted(shas)).encode()).hexdigest()
+
+
+def _bundle_manifest_path(staging_dir: Path, signature: str) -> Path:
+    return staging_dir / f"{signature}.bundle.json"
+
+
+def _write_bundle_manifest(staging_dir: Path, signature: str, files: list[dict]) -> None:
+    payload = {
+        "files": [
+            {"sha256": item["sha256"], "filename": item["filename"], "size_bytes": int(item["size_bytes"])} for item in files
+        ]
+    }
+    path = _bundle_manifest_path(staging_dir, signature)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload), encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def _read_bundle_manifest(path: Path) -> list[dict]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return list(payload.get("files") or [])
+
+
+def _candidates_for_signature(conn, shas: list[str]) -> list[dict]:
+    target = tuple(sorted(shas))
+    rows = conn.execute(
+        """
+        SELECT a.public_id AS artifact_id, a.title, a.updated_at, v.id AS version_pk, v.version_number,
+               v.original_filename AS filename
+        FROM artifact_versions v
+        JOIN artifacts a ON a.id = v.artifact_id
+        ORDER BY a.updated_at DESC, v.version_number DESC
+        """
+    ).fetchall()
+    grouped: dict[str, dict] = {}
+    for row in rows:
+        if _version_signature(conn, int(row["version_pk"])) != target:
+            continue
+        item = grouped.get(row["artifact_id"])
+        if item is None:
+            item = {
+                "artifact_id": row["artifact_id"],
+                "title": row["title"],
+                "filename": row["filename"],
+                "versions": [],
+            }
+            grouped[row["artifact_id"]] = item
+        if row["version_number"] not in item["versions"]:
+            item["versions"].append(row["version_number"])
+    return list(grouped.values())
 
 
 def _project_dto(row) -> dict:

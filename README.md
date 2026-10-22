@@ -38,13 +38,15 @@ chmod +x scripts/dev.sh
 
 脚本会准备虚拟环境、启动本地服务，并打开界面：<http://127.0.0.1:1420>。关闭这个终端时，由它启动的服务会一起停止。
 
-Skill 归档前使用的是后台启动器。它会在仓库里准备依赖，拉起后端和桌面界面，然后退出；服务继续在后台运行。已经启动过时会直接复用。
+Skill 归档前使用启动器。在本仓库里运行时，它会准备依赖，拉起后端和桌面界面，然后退出；服务继续在后台运行。已经启动过时会直接复用。
 
 ```bash
 python3 scripts/launch.py
 ```
 
 成功时输出以 `AGENTSHELF_LAUNCHED` 开头，并带上本机 `agentshelf` 命令的路径。需要桌面窗口而不是浏览器界面时，执行 `python3 scripts/launch.py --desktop tauri`。这需要本机已安装 Rust。
+
+发布 GitHub Release 时，工作流会把启动器编译成各系统的单个可执行文件，连同 SHA-256 校验文件上传到该 Release。本机没有源码启动器时，Skill 从最新 Release 下载对应系统的文件，保存为 `~/.agentshelf/bin/agentshelf-launcher`（Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`）。这个文件包含后端和本机界面，运行时不需要另外安装 Python 或 Node。
 
 只启动服务：
 
@@ -67,12 +69,13 @@ npm run tauri dev
 
 ## 归档
 
-界面支持点击选择、拖拽和多文件上传。上传前可以填写名称、描述、项目和标签。每个文件单独记录结果，一个失败不会回滚其他文件。
+界面支持点击选择、拖拽和多文件上传。一次放入的多个文件归档为同一份产物。上传前可以填写名称、描述、项目和标签。
 
 命令行：
 
 ```bash
 agentshelf archive ./最终稿.md --title "周报" --project "工作" --tags "报告" --source "cursor"
+agentshelf archive ./设计.md ./附图.png --title "方案" --project "工作"
 agentshelf search "周报"
 agentshelf status
 agentshelf backup
@@ -90,7 +93,7 @@ agentshelf stop
 请从 https://github.com/atorber/agentshelf 安装 Skill agentshelf-archive（目录 skill/agentshelf-archive）。安装到我当前使用的 Agent 的用户级 skills 目录，使所有项目可用。安装完成后告诉我安装位置。
 ```
 
-归档时对 Agent 说：「把这份最终稿归档到 AgentShelf。」名称、项目、标签和来源由 Skill 根据当前任务填写。
+归档时对 Agent 说：「把这份最终稿归档到 AgentShelf。」名称、项目、标签和来源由 Skill 根据当前任务填写。安装 Skill 时如果本机还没有启动器，Skill 会从最新 Release 下载对应系统的二进制。
 
 ## 主要接口
 

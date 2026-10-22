@@ -1,5 +1,16 @@
 export type PreviewKind = "markdown" | "text" | "csv" | "json" | "image" | "pdf" | "unsupported"
 
+export interface ArtifactFile {
+  id: string
+  filename: string
+  mime_type: string
+  size_bytes: number
+  sha256: string
+  preview_kind: PreviewKind
+  extract_status: string
+  extract_error: string
+}
+
 export interface Version {
   id: string
   version_number: number
@@ -13,6 +24,8 @@ export interface Version {
   extract_error: string
   created_at: string
   is_current: boolean
+  file_count: number
+  files: ArtifactFile[]
 }
 
 export interface Artifact {
@@ -47,6 +60,7 @@ export interface LibraryItem {
   tags: string[]
   updated_at: string
   is_current: boolean
+  file_count: number
   snippet: string
   score?: number
 }
@@ -135,6 +149,7 @@ export interface Status {
 export interface Preview {
   artifact_id: string
   version_id: string
+  file_id?: string
   version_number: number
   filename: string
   mime_type: string

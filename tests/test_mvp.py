@@ -213,6 +213,42 @@ def test_previews_for_supported_and_corrupt_files(client):
     assert unsupported.json()["preview_kind"] == "unsupported"
 
 
+def test_one_artifact_can_hold_multiple_files(client):
+    created = client.post(
+        "/api/ingest",
+        data={"title": "方案"},
+        files=[
+            ("files", ("设计.md", "# 设计\n正文".encode(), "text/markdown")),
+            ("files", ("图.png", PNG, "image/png")),
+        ],
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    version = body["current_version"]
+    assert version["file_count"] == 2
+    assert [item["filename"] for item in version["files"]] == ["设计.md", "图.png"]
+    listed = client.get("/api/artifacts")
+    assert listed.json()["items"][0]["file_count"] == 2
+    markdown = version["files"][0]
+    preview = client.get(f"/api/artifacts/{body['id']}/preview", params={"file_id": markdown["id"]})
+    assert preview.status_code == 200
+    assert "设计" in preview.json()["text"]
+    image = client.get(f"/api/artifacts/{body['id']}/preview", params={"file_id": version["files"][1]["id"]})
+    assert image.json()["preview_kind"] == "image"
+    found = client.get("/api/artifacts", params={"q": "正文"})
+    assert found.json()["total"] == 1
+    again = client.post(
+        "/api/ingest",
+        data={"title": "方案"},
+        files=[
+            ("files", ("设计.md", "# 设计\n正文".encode(), "text/markdown")),
+            ("files", ("图.png", PNG, "image/png")),
+        ],
+    )
+    assert again.status_code == 409
+    assert again.json()["status"] == "needs_decision"
+
+
 def test_download_matches_recorded_hash(client):
     content = "原始文件内容".encode()
     created = upload(client, "raw.txt", content)
@@ -390,3 +426,108 @@ def test_cli_archives_through_the_local_api(data_dir, tmp_path):
     finally:
         stop_running()
         thread.join(timeout=5)
+
+
+def test_release_launcher_names_match_the_skill():
+    from agentshelf.release_assets import RELEASE_DOWNLOAD, checksum_filename, install_path, launcher_filename
+
+    skill = (ROOT / "skill" / "agentshelf-archive" / "SKILL.md").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    cases = [
+        ("Darwin", "arm64"),
+        ("Darwin", "x86_64"),
+        ("Linux", "x86_64"),
+        ("Linux", "aarch64"),
+        ("Windows", "AMD64"),
+    ]
+    assert "git clone" not in skill
+    assert RELEASE_DOWNLOAD in skill
+    assert "launcher_stem" in workflow
+    assert "gh release upload" in workflow
+    assert "types: [published]" in workflow
+    for system, machine in cases:
+        assert launcher_filename(system, machine) in skill
+        assert checksum_filename(system, machine).endswith(".sha256")
+    assert "~/.agentshelf/bin/agentshelf-launcher" in skill
+    assert install_path(Path.home(), "windows") == Path.home() / ".agentshelf" / "bin" / "agentshelf-launcher.exe"
+
+
+def test_release_launcher_rejects_unknown_platforms():
+    import pytest
+    from agentshelf.release_assets import launcher_filename
+
+    with pytest.raises(ValueError):
+        launcher_filename("Windows", "ARM64")
+
+
+def test_ui_server_serves_the_interface_and_injects_the_token(tmp_path, monkeypatch):
+    import json
+    import urllib.error
+    import urllib.request
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from agentshelf.ui_server import InterfaceServer, make_handler, safe_static
+
+    monkeypatch.setenv("AGENTSHELF_DATA_DIR", str(tmp_path))
+    (tmp_path / "token").write_text("secret-token\n", encoding="utf-8")
+    desktop = tmp_path / "desktop"
+    desktop.mkdir()
+    (desktop / "index.html").write_text("<html>shelf</html>", encoding="utf-8")
+    outside = tmp_path / "secret.txt"
+    outside.write_text("nope", encoding="utf-8")
+    assert safe_static(desktop, "/") == desktop / "index.html"
+    assert safe_static(desktop, "/../secret.txt") is None
+    assert safe_static(desktop, "/%2e%2e/secret.txt") is None
+
+    seen: dict[str, str] = {}
+
+    class Backend(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            seen["authorization"] = self.headers.get("Authorization") or ""
+            seen["path"] = self.path
+            body = b'{"ok":true}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, fmt, *args):
+            return
+
+    backend = ThreadingHTTPServer(("127.0.0.1", 0), Backend)
+    backend_port = backend.server_address[1]
+    (tmp_path / "runtime.json").write_text(
+        json.dumps({"port": backend_port, "pid": 1, "host": "127.0.0.1"}),
+        encoding="utf-8",
+    )
+    backend_thread = threading.Thread(target=backend.serve_forever, daemon=True)
+    backend_thread.start()
+    ui = InterfaceServer(("127.0.0.1", 0), make_handler(desktop))
+    ui_port = ui.server_address[1]
+    ui_thread = threading.Thread(target=ui.serve_forever, daemon=True)
+    ui_thread.start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{ui_port}/", timeout=3) as response:
+            assert b"shelf" in response.read()
+        with urllib.request.urlopen(f"http://127.0.0.1:{ui_port}/api/health", timeout=3) as response:
+            assert response.status == 200
+            assert json.loads(response.read())["ok"] is True
+        assert seen["authorization"] == "Bearer secret-token"
+        assert seen["path"] == "/api/health"
+        backend.shutdown()
+        backend.server_close()
+        with pytest.raises(urllib.error.HTTPError) as unavailable:
+            urllib.request.urlopen(f"http://127.0.0.1:{ui_port}/api/health", timeout=3)
+        assert unavailable.value.code == 502
+        assert "本地服务不可用" in unavailable.value.read().decode("utf-8")
+        with urllib.request.urlopen(f"http://127.0.0.1:{ui_port}/", timeout=3) as response:
+            assert b"shelf" in response.read()
+        with pytest.raises(urllib.error.HTTPError) as rejected:
+            urllib.request.urlopen(f"http://127.0.0.1:{ui_port}/../secret.txt", timeout=3)
+        assert rejected.value.code == 404
+    finally:
+        ui.shutdown()
+        ui.server_close()
+        backend.shutdown()
+        backend.server_close()

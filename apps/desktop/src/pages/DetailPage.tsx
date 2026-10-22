@@ -3,7 +3,30 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { deleteArtifact, downloadArtifact, getArtifact, restoreVersion, updateArtifact, verify } from "../api"
 import { PreviewPane } from "../components/PreviewPane"
 import { formatBytes, formatTime, kindLabel } from "../format"
-import type { Artifact } from "../types"
+import type { Artifact, ArtifactFile, Version } from "../types"
+
+function listedFiles(version: Version): ArtifactFile[] {
+  if (version.files?.length) return version.files
+  return [
+    {
+      id: "",
+      filename: version.filename,
+      mime_type: version.mime_type,
+      size_bytes: version.size_bytes,
+      sha256: version.sha256,
+      preview_kind: version.preview_kind,
+      extract_status: version.extract_status,
+      extract_error: version.extract_error,
+    },
+  ]
+}
+
+function fileSignature(version: Version) {
+  return listedFiles(version)
+    .map((file) => file.sha256)
+    .sort()
+    .join("\n")
+}
 
 export function DetailPage() {
   const { id = "" } = useParams()
@@ -19,6 +42,7 @@ export function DetailPage() {
   const [source, setSource] = useState("")
 
   const versionId = params.get("version") || undefined
+  const fileId = params.get("file") || undefined
 
   function load(nextId = id) {
     return getArtifact(nextId)
@@ -39,6 +63,10 @@ export function DetailPage() {
   }, [id])
 
   const selected = artifact?.versions.find((item) => item.id === versionId) || artifact?.current_version
+  const files = selected ? listedFiles(selected) : []
+  const opened = files.find((file) => file.id && file.id === fileId)
+  const showList = files.length > 1 && !opened
+  const shown = opened || (files.length === 1 ? files[0] : undefined)
 
   async function save() {
     try {
@@ -62,10 +90,23 @@ export function DetailPage() {
     }
   }
 
+  function openFile(file: ArtifactFile) {
+    const next = new URLSearchParams()
+    if (versionId) next.set("version", versionId)
+    if (file.id) next.set("file", file.id)
+    setParams(next)
+  }
+
+  function backToFiles() {
+    const next = new URLSearchParams()
+    if (versionId) next.set("version", versionId)
+    setParams(next)
+  }
+
   async function download() {
-    if (!selected) return
+    if (!selected || !shown) return
     try {
-      await downloadArtifact(id, selected.id, selected.filename)
+      await downloadArtifact(id, selected.id, shown.filename, shown.id || undefined)
       setNotice("已下载，并通过哈希校验")
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "下载失败")
@@ -74,7 +115,7 @@ export function DetailPage() {
 
   async function check() {
     try {
-      const result = await verify(id, selected?.id)
+      const result = await verify(id, selected?.id, shown?.id || undefined)
       setNotice(result.ok ? "文件与记录的 SHA-256 一致" : "文件内容与记录不一致")
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "校验失败")
@@ -97,16 +138,22 @@ export function DetailPage() {
           <Link to="/">返回产物库</Link>
           <h1>{artifact.title}</h1>
           <p>
-            {kindLabel[selected.preview_kind] || selected.preview_kind} · {selected.filename} · {formatBytes(selected.size_bytes)}
+            {showList || !shown
+              ? `${files.length} 个文件`
+              : `${kindLabel[shown.preview_kind] || shown.preview_kind} · ${shown.filename} · ${formatBytes(shown.size_bytes)}`}
           </p>
         </div>
         <div className="actions">
-          <button className="btn-ghost" onClick={download}>
-            下载
-          </button>
-          <button className="btn-ghost" onClick={check}>
-            校验
-          </button>
+          {shown ? (
+            <>
+              <button className="btn-ghost" onClick={download}>
+                下载
+              </button>
+              <button className="btn-ghost" onClick={check}>
+                校验
+              </button>
+            </>
+          ) : null}
           <button className="btn-danger" onClick={remove}>
             删除
           </button>
@@ -115,7 +162,32 @@ export function DetailPage() {
       {error ? <p className="error">{error}</p> : null}
       {notice ? <p className="notice">{notice}</p> : null}
       <div className="detail">
-        <PreviewPane artifactId={id} versionId={selected.id} />
+        {showList ? (
+          <div className="panel">
+            <strong>文件</strong>
+            {files.map((file) => (
+              <div className="version" key={file.id || file.sha256}>
+                <div>
+                  <button className="btn-ghost" onClick={() => openFile(file)}>
+                    {file.filename}
+                  </button>
+                  <div className="muted">
+                    {kindLabel[file.preview_kind] || file.preview_kind} · {formatBytes(file.size_bytes)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="stack">
+            {files.length > 1 ? (
+              <button className="btn-ghost" onClick={backToFiles}>
+                返回文件列表
+              </button>
+            ) : null}
+            <PreviewPane artifactId={id} versionId={selected.id} fileId={shown?.id || undefined} />
+          </div>
+        )}
         <div className="stack">
           <div className="panel stack">
             <label className="field">
@@ -141,9 +213,9 @@ export function DetailPage() {
             <button className="btn-primary" onClick={save}>
               保存信息
             </button>
-            <div className="hash">SHA-256 {selected.sha256}</div>
-            {selected.extract_status === "pending" ? <div className="muted">正在建立索引…</div> : null}
-            {selected.extract_error ? <div className="error">{selected.extract_error}</div> : null}
+            {shown ? <div className="hash">SHA-256 {shown.sha256}</div> : <div className="muted">打开文件后可以下载和校验。</div>}
+            {(shown || selected).extract_status === "pending" ? <div className="muted">正在建立索引…</div> : null}
+            {(shown || selected).extract_error ? <div className="error">{(shown || selected).extract_error}</div> : null}
           </div>
           <div className="panel">
             <strong>版本</strong>
@@ -154,11 +226,11 @@ export function DetailPage() {
                     v{version.version_number} {version.is_current ? "当前" : ""}
                   </button>
                   <div className="muted">
-                    {formatTime(version.created_at)} · {version.filename}
+                    {formatTime(version.created_at)} · {(version.file_count || version.files?.length || 1) > 1 ? `${version.file_count || version.files.length} 个文件` : version.filename}
                     {version.note ? ` · ${version.note}` : ""}
                   </div>
                 </div>
-                {version.sha256 !== artifact.current_version?.sha256 ? (
+                {artifact.current_version && fileSignature(version) !== fileSignature(artifact.current_version) ? (
                   <button className="btn-ghost" onClick={() => restore(version.id)}>
                     恢复
                   </button>

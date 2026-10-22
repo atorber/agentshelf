@@ -118,7 +118,7 @@ export function LibraryPage() {
                 {!item.is_current ? <span className="tag">v{item.version_number}</span> : null}
               </div>
               <div className="muted">
-                {item.project || "未分组"} · {item.filename} · {formatTime(item.updated_at)}
+                {item.project || "未分组"} · {item.file_count > 1 ? `${item.file_count} 个文件` : item.filename} · {formatTime(item.updated_at)}
               </div>
               {item.snippet ? <SnippetText value={item.snippet} /> : null}
             </Link>
@@ -133,7 +133,7 @@ export function LibraryPage() {
                 <span className="muted">v{item.version_number}</span>
               </div>
               <h2>{item.title}</h2>
-              <div className="muted">{item.description || item.filename}</div>
+              <div className="muted">{item.description || (item.file_count > 1 ? `${item.file_count} 个文件` : item.filename)}</div>
               <div className="tags">
                 {item.project ? <span className="tag">{item.project}</span> : null}
                 {item.tags.map((name) => (
