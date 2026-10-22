@@ -90,6 +90,8 @@ agentshelf stop
 请从 https://github.com/atorber/agentshelf 安装 Skill agentshelf-archive（目录 skill/agentshelf-archive）。安装到我当前使用的 Agent 的用户级 skills 目录，使所有项目可用。安装完成后告诉我安装位置。
 ```
 
+归档时对 Agent 说：「把这份最终稿归档到 AgentShelf。」名称、项目、标签和来源由 Skill 根据当前任务填写。
+
 ## 主要接口
 
 除 `GET /api/health` 外，请求都需要本机令牌：`Authorization: Bearer <token>`。令牌写在数据目录的 `token` 文件中，权限为仅当前用户可读。
