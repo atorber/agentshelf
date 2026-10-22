@@ -153,7 +153,7 @@ export function DetailPage() {
   }
 
   async function remove() {
-    if (!window.confirm("删除后无法从产物库恢复，确定删除？")) return
+    if (!window.confirm("删除后无法从知识库恢复，确定删除？")) return
     try {
       await deleteArtifact(id)
       navigate(libraryPath())
@@ -166,7 +166,7 @@ export function DetailPage() {
     return (
       <section className="page">
         <div className="crumbs">
-          <Link to={libraryPath()}>产物库</Link>
+          <Link to={libraryPath()}>知识库</Link>
         </div>
         <p className="error">{error}</p>
       </section>
@@ -176,9 +176,9 @@ export function DetailPage() {
     return (
       <section className="page">
         <div className="crumbs">
-          <Link to={libraryPath()}>产物库</Link>
+          <Link to={libraryPath()}>知识库</Link>
         </div>
-        <div className="panel empty">正在读取产物…</div>
+        <div className="panel empty">正在读取…</div>
       </section>
     )
   }
@@ -190,7 +190,7 @@ export function DetailPage() {
     <section className="page">
       <div className="stack" style={{ gap: 6 }}>
         <nav className="crumbs" aria-label="位置">
-          <Link to={libraryPath()}>产物库</Link>
+          <Link to={libraryPath()}>知识库</Link>
           <span className="sep">/</span>
           {inSidecar ? (
             <button onClick={backToDocument}>{artifact.title}</button>
@@ -212,7 +212,7 @@ export function DetailPage() {
         </nav>
         <div className="page-head">
           <div className="title-row">
-            <button className="btn-ghost icon-btn" onClick={goUp} title={inSidecar ? "返回正文" : "返回产物库"} aria-label={inSidecar ? "返回正文" : "返回产物库"}>
+            <button className="btn-ghost icon-btn" onClick={goUp} title={inSidecar ? "返回正文" : "返回知识库"} aria-label={inSidecar ? "返回正文" : "返回知识库"}>
               <Icon name="back" />
             </button>
             <h1>{artifact.title}</h1>
@@ -408,7 +408,7 @@ export function DetailPage() {
             </div>
           </div>
           <button className="btn-text danger" onClick={remove} style={{ alignSelf: "flex-start" }}>
-            删除产物
+            删除这条知识
           </button>
         </aside>
       </div>

@@ -181,7 +181,7 @@ class Library:
         filename = safe_filename(filename)
         decision = _clean_decision(decision)
         if decision == "new_version" and not (artifact_id or "").strip():
-            raise LibraryError(400, "追加为新版本时必须指定产物")
+            raise LibraryError(400, "追加为新版本时必须指定要追加的知识")
         with db_session(self.settings.db_path) as conn:
             candidates = _candidates_for_hash(conn, sha256)
         if decision is None and candidates:
@@ -193,7 +193,7 @@ class Library:
                 "filename": filename,
                 "size_bytes": size_bytes,
                 "stored_new_blob": False,
-                "message": "相同内容已存在。请明确选择创建新产物，或追加为某个产物的新版本。文件名不会用来覆盖已有产物。",
+                "message": "相同内容已存在。请明确选择新建一条知识，或追加为某一条的新版本。文件名不会用来覆盖已有知识。",
                 "candidates": candidates,
             }
         if decision is None:
@@ -229,7 +229,7 @@ class Library:
         sha256 = _require_sha(staging_id)
         decision = _clean_decision(decision)
         if decision not in {"new_artifact", "new_version"}:
-            raise LibraryError(400, "请明确选择创建新产物或追加版本")
+            raise LibraryError(400, "请明确选择新建一条知识或追加版本")
         manifest = _bundle_manifest_path(self.settings.staging_dir, sha256)
         if manifest.is_file():
             return self._finalize_bundle(
@@ -291,7 +291,7 @@ class Library:
         self.require_available()
         decision = _clean_decision(decision)
         if decision == "new_version" and not (artifact_id or "").strip():
-            raise LibraryError(400, "追加为新版本时必须指定产物")
+            raise LibraryError(400, "追加为新版本时必须指定要追加的知识")
         files = [
             {"path": path, "sha256": sha256, "size_bytes": size_bytes, "filename": safe_filename(filename)}
             for path, sha256, size_bytes, filename in staged
@@ -308,7 +308,7 @@ class Library:
                 "filename": files[0]["filename"],
                 "size_bytes": sum(item["size_bytes"] for item in files),
                 "stored_new_blob": False,
-                "message": "相同的一组文件已存在。请明确选择创建新产物，或追加为某个产物的新版本。",
+                "message": "相同的一组文件已存在。请明确选择新建一条知识，或追加为某一条的新版本。",
                 "candidates": candidates,
             }
         if decision is None:
@@ -996,7 +996,7 @@ class Library:
                 detail = self.get_artifact(artifact["public_id"])
                 detail["status"] = "duplicate_version"
                 detail["stored_new_blob"] = False
-                detail["message"] = f"该产物已包含相同内容（v{duplicate['version_number']}），未重复保存。"
+                detail["message"] = f"这条知识已包含相同内容（v{duplicate['version_number']}），未重复保存。"
                 return detail
 
         head = staging_path.read_bytes()[:64] if staging_path.exists() else b""
@@ -1051,7 +1051,7 @@ class Library:
         detail = self.get_artifact(public_id)
         detail["status"] = status
         detail["stored_new_blob"] = stored_new
-        detail["message"] = "已创建新产物" if status == "created" else "已追加新版本"
+        detail["message"] = "已新增一条知识" if status == "created" else "已追加新版本"
         return detail
 
     def _finalize_bundle(
@@ -1076,7 +1076,7 @@ class Library:
                 detail = self.get_artifact(artifact["public_id"])
                 detail["status"] = "duplicate_version"
                 detail["stored_new_blob"] = False
-                detail["message"] = f"该产物已包含相同的一组文件（v{duplicate['version_number']}），未重复保存。"
+                detail["message"] = f"这条知识已包含相同的一组文件（v{duplicate['version_number']}），未重复保存。"
                 return detail
         prepared: list[dict] = []
         for item in files:
@@ -1161,7 +1161,7 @@ class Library:
         detail["status"] = status
         detail["stored_new_blob"] = stored_new
         count = len(prepared)
-        detail["message"] = f"已创建新产物，包含 {count} 个文件" if status == "created" else f"已追加新版本，包含 {count} 个文件"
+        detail["message"] = f"已新增一条知识，包含 {count} 个文件" if status == "created" else f"已追加新版本，包含 {count} 个文件"
         return detail
 
     def _discard_staged(self, files: list[dict], signature: str) -> None:
@@ -1492,7 +1492,7 @@ def _set_setting(conn, key: str, value: str) -> None:
 def _require_artifact(conn, public_id: str):
     row = conn.execute("SELECT * FROM artifacts WHERE public_id = ?", (public_id,)).fetchone()
     if row is None:
-        raise LibraryError(404, "产物不存在")
+        raise LibraryError(404, "找不到这条知识")
     return row
 
 
@@ -1926,7 +1926,7 @@ def _artifact_detail(conn, public_id: str) -> dict:
         (public_id,),
     ).fetchone()
     if row is None:
-        raise LibraryError(404, "产物不存在")
+        raise LibraryError(404, "找不到这条知识")
     versions = conn.execute(
         "SELECT * FROM artifact_versions WHERE artifact_id = ? ORDER BY version_number DESC",
         (row["id"],),

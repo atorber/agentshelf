@@ -6,7 +6,7 @@ import type { Status } from "../types"
 import { Icon } from "./Icon"
 
 const links = [
-  ["/", "产物库", "library"],
+  ["/", "知识库", "library"],
   ["/upload", "上传", "upload"],
   ["/organize", "整理", "organize"],
   ["/settings", "设置", "settings"],
@@ -67,7 +67,7 @@ export function Layout() {
             <span className={offline || info?.db_ok === false ? "dot warn" : "dot"} />
             {offline ? "服务未响应" : info?.db_ok === false ? "数据库异常" : info ? "服务运行中" : "正在连接"}
           </div>
-          {info ? <div className="faint">{info.storage.artifact_count} 个产物 · v{info.version}</div> : null}
+          {info ? <div className="faint">{info.storage.artifact_count} 条知识 · v{info.version}</div> : null}
         </div>
       </aside>
       <main className="main">

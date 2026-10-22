@@ -191,7 +191,7 @@ button:disabled, .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .kind-bundle { background: #fdf1e3; color: #8a5a1c; }
 .badge.current { background: var(--accent-soft); color: var(--accent); }
 
-/* 产物库 */
+/* 知识库 */
 .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .search { position: relative; flex: 1; min-width: 240px; display: flex; }
 .search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }

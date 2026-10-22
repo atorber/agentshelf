@@ -39,7 +39,7 @@ export function App() {
         <div className="boot-card">
           <h1>AgentShelf</h1>
           <p>{phase === "error" ? "本地服务没有在预期时间内就绪。" : "正在连接本地服务…"}</p>
-          {phase === "loading" ? <p className="muted">服务就绪后会自动进入产物库。</p> : null}
+          {phase === "loading" ? <p className="muted">服务就绪后会自动进入知识库。</p> : null}
           {phase === "error" && detail ? <p className="error">{detail}</p> : null}
           {phase === "error" ? (
             <p className="muted">可以在项目目录运行 ./scripts/dev.sh，或先执行 agentshelf serve，再刷新这个页面。</p>

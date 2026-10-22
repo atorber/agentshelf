@@ -95,7 +95,7 @@ export function UploadPage() {
       <div className="page-head">
         <div>
           <h1>上传</h1>
-          <p>一次放入的文件归档为同一份产物。</p>
+          <p>一次放入的文件归为同一条知识。</p>
         </div>
       </div>
       <div
@@ -231,9 +231,9 @@ function BundleState({
       <div className="notice warn">
         <div>{result.message}</div>
         <div className="choice">
-          <span>作为一份独立的新产物保存</span>
+          <span>作为一条独立的新知识保存</span>
           <button className="btn" onClick={() => onChoose("new_artifact")}>
-            创建新产物
+            新建一条知识
           </button>
         </div>
         {(result.candidates || []).map((candidate) => (
@@ -255,7 +255,7 @@ function BundleState({
       <div className="notice">
         {result.message || "已归档"}
         {count > 1 ? ` · ${count} 个文件` : ""}
-        {result.stored_new_blob === false ? " · 已复用相同内容" : ""} · <Link to={`/artifacts/${result.id}`}>查看产物</Link>
+        {result.stored_new_blob === false ? " · 已复用相同内容" : ""} · <Link to={`/artifacts/${result.id}`}>查看这条知识</Link>
       </div>
     )
   }

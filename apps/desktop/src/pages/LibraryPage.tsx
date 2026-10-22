@@ -68,7 +68,7 @@ export function LibraryPage() {
   return (
     <section className="page">
       <div className="page-head">
-        <h1>产物库</h1>
+        <h1>知识库</h1>
         <Link className="btn-primary" to="/upload">
           <Icon name="upload" />
           上传
@@ -115,7 +115,7 @@ export function LibraryPage() {
       </div>
       {error ? <p className="error">{error}</p> : null}
       <div className="result-bar">
-        <span>{!ready ? (loading ? "正在读取…" : "") : loading ? "正在更新…" : query ? `${total} 条结果，包含历史版本` : `${total} 个产物`}</span>
+        <span>{!ready ? (loading ? "正在读取…" : "") : loading ? "正在更新…" : query ? `${total} 条结果，包含历史版本` : `${total} 条知识`}</span>
         {filtered ? (
           <button className="btn-text" onClick={() => setParams({}, { replace: true })}>
             清除筛选
@@ -127,11 +127,11 @@ export function LibraryPage() {
         <div className="items empty">
           {filtered ? (
             <>
-              <strong>没有匹配的产物</strong>换个关键词，或清除筛选。
+              <strong>没有匹配的知识</strong>换个关键词，或清除筛选。
             </>
           ) : (
             <>
-              <strong>还没有产物</strong>在 Agent 里说「把这份最终稿归档到 AgentShelf。」，或者直接上传文件。
+              <strong>知识库还是空的</strong>在 Agent 里说「把这份最终稿归档到 AgentShelf。」，或者直接上传文件。
             </>
           )}
         </div>

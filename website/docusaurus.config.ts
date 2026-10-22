@@ -4,7 +4,7 @@ import {themes as prismThemes} from "prism-react-renderer"
 
 const config: Config = {
   title: "AgentShelf",
-  tagline: "面向多个 AI Agent 的本地最终产物库",
+  tagline: "面向多个 AI Agent 的本地知识库",
   favicon: "img/favicon.svg",
   url: "https://atorber.github.io",
   baseUrl: "/agentshelf/",

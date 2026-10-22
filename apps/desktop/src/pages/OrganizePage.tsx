@@ -28,7 +28,7 @@ export function OrganizePage() {
       <div className="page-head">
         <div>
           <h1>整理</h1>
-          <p>项目、标签和来源只用于归类和筛选。删除它们不会删除产物。</p>
+          <p>项目、标签和来源只用于归类和筛选。删除它们不会删除已收入的知识。</p>
         </div>
       </div>
       {error ? <p className="error">{error}</p> : null}
@@ -162,7 +162,7 @@ function Manager({
                   <span>{row.name}</span>
                 </div>
                 <div className="item-sub">
-                  <Link to={`/?${filterKey}=${encodeURIComponent(row.name)}`}>{row.count} 个产物</Link>
+                  <Link to={`/?${filterKey}=${encodeURIComponent(row.name)}`}>{row.count} 条知识</Link>
                   {row.extra ? ` · ${row.extra}` : ""}
                 </div>
               </div>
@@ -180,7 +180,7 @@ function Manager({
                 <button
                   className="btn-text danger"
                   onClick={() => {
-                    if (window.confirm(`删除${title}「${row.name}」？产物不会被删除。`)) onDelete(row.id).catch(() => setError("删除失败"))
+                    if (window.confirm(`删除${title}「${row.name}」？已收入的知识不会被删除。`)) onDelete(row.id).catch(() => setError("删除失败"))
                   }}
                 >
                   删除

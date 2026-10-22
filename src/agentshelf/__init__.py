@@ -1,3 +1,3 @@
-"""AgentShelf 本地个人产物仓库。"""
+"""AgentShelf 本地个人知识库。"""
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"

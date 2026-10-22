@@ -447,7 +447,7 @@ def test_cli_and_skill_report_the_package_version():
 
 
 def test_release_launcher_names_match_the_skill():
-    from agentshelf.release_assets import RELEASE_DOWNLOAD, checksum_filename, install_path, launcher_filename
+    from agentshelf.release_assets import checksum_filename, install_path, launcher_filename
 
     skill = (ROOT / "skill" / "agentshelf-archive" / "SKILL.md").read_text(encoding="utf-8")
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
@@ -461,7 +461,10 @@ def test_release_launcher_names_match_the_skill():
     deploy = skill.split("## 部署", 1)[1].split("## 归档", 1)[0]
     steps = "\n".join(line for line in deploy.splitlines() if line.startswith(("1. ", "2. ", "3. ", "4. ", "5. ")))
     assert "git clone" not in skill
-    assert RELEASE_DOWNLOAD in skill
+    assert "https://github.com/atorber/agentshelf/releases/download/v" in skill
+    assert "releases/latest/download" not in skill
+    assert "版本升级" in deploy
+    assert "`stop`" in deploy
     assert steps.index("runtime.json") < steps.index("agentshelf-launcher")
     assert steps.index("agentshelf-launcher") < steps.index("GitHub Release")
     assert steps.index("GitHub Release") < steps.index("~/.agentshelf/app")

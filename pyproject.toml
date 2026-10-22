@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentshelf"
-version = "0.3.0"
-description = "本地个人 AI 产物仓库"
+version = "0.3.1"
+description = "本地个人 AI 知识库"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

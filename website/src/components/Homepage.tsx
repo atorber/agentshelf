@@ -26,9 +26,9 @@ const steps = [
 ]
 
 const pages = [
-  {href: "/usage/library", title: "产物库", text: "一行一条。搜索、筛选，点进去看详情。"},
+  {href: "/usage/library", title: "知识库", text: "一行一条。搜索、筛选，点进去看详情。"},
   {href: "/usage/upload", title: "上传", text: "不经过 Agent，自己把文件放进库。"},
-  {href: "/usage/organize", title: "整理", text: "维护项目、标签和来源。删除它们不会删除产物。"},
+  {href: "/usage/organize", title: "整理", text: "维护项目、标签和来源。删除它们不会删除已收入的知识。"},
   {href: "/usage/settings", title: "设置", text: "复制提示词、查看数据目录、备份，按需启用语义检索。"},
 ]
 
@@ -37,8 +37,8 @@ export default function Homepage() {
     <div>
       <header className={styles.hero}>
         <h1>AgentShelf</h1>
-        <p className={styles.lead}>面向多个 AI Agent 的本地最终产物库。任务结束后，把值得留下的最终稿收进这台电脑，在一个窗口里检索、预览和保留版本。</p>
-        <p className={styles.meta}>当前版本 0.3.0 · macOS 与 Windows · 文件、检索词和使用记录都留在本机</p>
+        <p className={styles.lead}>面向多个 AI Agent 的本地知识库。任务结束后，把值得留下的最终稿收进这台电脑，在一个窗口里检索、预览和保留版本。</p>
+        <p className={styles.meta}>当前版本 0.3.1 · macOS 与 Windows · 文件、检索词和使用记录都留在本机</p>
         <div className={styles.actions}>
           <Link className="button button--primary" to="/quickstart">
             安装并归档第一份
@@ -68,8 +68,8 @@ export default function Homepage() {
         <p>一次任务结束后，最终稿常常散落在各个 Agent 的对话和项目文件夹里。换一个 Agent 继续时，很难同时回答：文件在哪、哪一版是现在用的、它从哪个 Agent 来。</p>
         <div className={styles.split}>
           <div className={styles.card}>
-            <h3>收进产物库</h3>
-            <p>文档、代码、图片、报告、数据文件，以及后来对它们的修改。每份产物记下编号、来源 Agent、所属项目和归档时间。</p>
+            <h3>收进知识库</h3>
+            <p>文档、代码、图片、报告、数据文件，以及后来对它们的修改。每条知识记下编号、来源 Agent、所属项目和归档时间。</p>
           </div>
           <div className={styles.card}>
             <h3>留在对话里</h3>

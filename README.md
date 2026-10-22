@@ -1,6 +1,6 @@
 # AgentShelf
 
-AgentShelf 是面向多个 AI Agent 的本地最终产物库。Claude Code、Cursor、Codex 以及其他支持 Skill 的 Agent，通过同一个归档 Skill 把最终成果交到本机，在这里检索、预览、保留版本和备份。正常使用不需要互联网，也不会把文件、检索词或使用记录发到外部服务。思考过程、执行日志和中间文件不进入产物库。
+AgentShelf 是面向多个 AI Agent 的本地知识库。Claude Code、Cursor、Codex 以及其他支持 Skill 的 Agent，通过同一个归档 Skill 把最终成果交到本机，在这里检索、预览、保留版本和备份。正常使用不需要互联网，也不会把文件、检索词或使用记录发到外部服务。思考过程、执行日志和中间文件不进入知识库。
 
 产品介绍、快速开始和使用说明：<https://atorber.github.io/agentshelf/>（源文件在 [website](website/docs/index.mdx)）。
 
@@ -20,9 +20,9 @@ SQLite    内容寻址文件
 FTS5      objects/<sha256>
 ```
 
-- 产物身份是独立编号。文件名不会用来覆盖已有产物。
+- 每条知识有独立编号。文件名不会用来覆盖已有知识。
 - 文件按 SHA-256 保存。相同内容只保留一份物理文件。
-- 相同内容再次归档时，必须明确选择“新产物”或“追加到指定产物”。
+- 相同内容再次归档时，必须明确选择“新建一条知识”或“追加到指定的那一条”。
 - 全文检索使用 SQLite FTS5。语义检索是可选项，模型由用户自行导入，未启用时其余功能完整可用。
 - 索引任务放在 SQLite 队列里。异常退出后，未完成任务会在下次启动时继续。
 - 数据目录使用操作系统标准位置。macOS 为 `~/Library/Application Support/AgentShelf`。
@@ -38,7 +38,7 @@ chmod +x scripts/dev.sh
 
 脚本会准备虚拟环境、启动本地服务，并打开界面：<http://127.0.0.1:1420>。关闭这个终端时，由它启动的服务会一起停止。
 
-Skill 归档前先检查服务是否已经启动。`runtime.json` 里的端口能通过 `/api/health` 时，直接使用现有服务，不再下载或重新启动。服务没在运行时，才检查发布的二进制；没有就从最新 Release 下载。下载失败时再用 `~/.agentshelf/app` 里的 `scripts/launch.py`，最后才用当前仓库的 `scripts/launch.py`。启动器拉起后端和桌面界面后退出，服务继续在后台运行。
+Skill 归档前比较本 Skill 版本和 `/api/health` 的 `version`。版本一致且服务已启动时直接使用，不再下载或重新启动。本 Skill 版本更高时，从标签 `v<版本>` 的 Release 下载启动器，停掉旧服务后再启动。版本一致但服务没在运行时，才检查本机二进制；没有就下载该版本。下载失败时再用 `~/.agentshelf/app` 里的 `scripts/launch.py`，最后才用当前仓库的 `scripts/launch.py`。启动器拉起后端和桌面界面后退出，服务继续在后台运行。
 
 ```bash
 python3 scripts/launch.py
@@ -46,7 +46,7 @@ python3 scripts/launch.py
 
 成功时输出以 `AGENTSHELF_LAUNCHED` 开头，并带上本机 `agentshelf` 命令的路径。需要桌面窗口而不是浏览器界面时，执行 `python3 scripts/launch.py --desktop tauri`。这需要本机已安装 Rust。
 
-发布 GitHub Release 时，工作流会把启动器编译成各系统的单个可执行文件，连同 SHA-256 校验文件上传到该 Release。本机没有 `~/.agentshelf/bin/agentshelf-launcher`（Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`）时，Skill 从最新 Release 下载对应系统的文件。这个文件包含后端和本机界面，运行时不需要另外安装 Python 或 Node。下载失败时，再用 `~/.agentshelf/app` 里的 `scripts/launch.py`，最后才用当前仓库。
+发布 GitHub Release 时，工作流会把启动器编译成各系统的单个可执行文件，连同 SHA-256 校验文件上传到该 Release。标签形如 `v0.3.1`。本机没有对应版本的 `~/.agentshelf/bin/agentshelf-launcher`（Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`），或正在运行的服务比 Skill 旧时，Skill 从该标签下载对应系统的文件，并在升级时重启服务。这个文件包含后端和本机界面，运行时不需要另外安装 Python 或 Node。下载失败时，再用 `~/.agentshelf/app` 里的 `scripts/launch.py`，最后才用当前仓库。版本升级的下载失败则停住，不改用旧二进制。
 
 只启动服务：
 
@@ -69,7 +69,7 @@ npm run tauri dev
 
 ## 归档
 
-界面支持点击选择、拖拽和多文件上传。一次放入的多个文件归档为同一份产物。上传前可以填写名称、描述、项目和标签。
+界面支持点击选择、拖拽和多文件上传。一次放入的多个文件归为同一条知识。上传前可以填写名称、描述、项目和标签。
 
 命令行：
 
@@ -83,7 +83,7 @@ agentshelf restore ./备份.zip --yes
 agentshelf stop
 ```
 
-内容已存在时，`archive` 以退出码 2 返回候选产物，不会自动覆盖。之后使用 `--new-artifact`，或 `--artifact-id <编号>` 追加版本。
+内容已存在时，`archive` 以退出码 2 返回已有的候选知识，不会自动覆盖。之后使用 `--new-artifact`，或 `--artifact-id <编号>` 追加版本。
 
 ## 安装 Skill
 
@@ -93,7 +93,7 @@ agentshelf stop
 请从 https://github.com/atorber/agentshelf 安装 Skill agentshelf-archive（目录 skill/agentshelf-archive）。安装到我当前使用的 Agent 的用户级 skills 目录，使所有项目可用。安装完成后告诉我安装位置。
 ```
 
-归档时对 Agent 说：「把这份最终稿归档到 AgentShelf。」名称、项目、标签和来源由 Skill 根据当前任务填写。安装 Skill 时先看服务是否已经启动；没启动才检查发布的启动器二进制，没有就从最新 Release 下载。
+归档时对 Agent 说：「把这份最终稿归档到 AgentShelf。」名称、项目、标签和来源由 Skill 根据当前任务填写。安装 Skill 时先比较版本。服务已启动且版本不低于 Skill 就直接使用；Skill 更新时下载对应版本的启动器并重启服务。
 
 ## 主要接口
 
@@ -108,7 +108,7 @@ agentshelf stop
 | GET | `/api/artifacts` | 列表或检索 |
 | GET | `/api/artifacts/{id}` | 详情 |
 | PATCH | `/api/artifacts/{id}` | 修改名称、描述、项目、标签、来源 |
-| DELETE | `/api/artifacts/{id}` | 删除产物 |
+| DELETE | `/api/artifacts/{id}` | 删除这条知识 |
 | GET | `/api/artifacts/{id}/preview` | 预览数据 |
 | GET | `/api/artifacts/{id}/download` | 下载原始文件，响应头带 SHA-256 |
 | GET | `/api/artifacts/{id}/verify` | 重新计算哈希并比对 |

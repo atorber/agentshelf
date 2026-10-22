@@ -1,28 +1,40 @@
 ---
 name: agentshelf-archive
-version: 0.3.0
-description: 把当前任务的最终产物归档到本地 AgentShelf。用户说「把这份最终稿归档到 AgentShelf」或要求保存最终稿、收入产物库时使用。自行确定文件，并填写名称、项目、标签、来源和描述，不要向用户索要这些字段。调用前先检查服务是否已经启动，已启动就直接使用。否则检查发布的启动器二进制；没有就从 GitHub Release 下载。下载失败再用 ~/.agentshelf/app 里的 scripts/launch.py，最后才用当前仓库。不要克隆仓库。不要归档思考过程、日志或中间文件。
+version: 0.3.1
+description: 把当前任务的最终稿归档到本地知识库。用户说「把这份最终稿归档到 AgentShelf」或要求保存最终稿、收入知识库时使用。自行确定文件，并填写名称、项目、标签、来源和描述，不要向用户索要这些字段。调用前比较本 Skill 版本和正在运行的服务版本。本 Skill 更高时，下载对应版本的启动器二进制，停掉旧服务后再启动。版本一致且服务已启动就直接使用。否则检查发布的启动器二进制；没有就从该版本的 GitHub Release 下载。下载失败再用 ~/.agentshelf/app 里的 scripts/launch.py，最后才用当前仓库。不要克隆仓库。不要归档思考过程、日志或中间文件。
 ---
 
 # AgentShelf 归档
 
-版本 0.3.0。
+版本 0.3.1。
 
-用户要求归档时，只归档当前任务的最终成果。先完成下面的部署，再使用启动器输出的 `bin` 调用本地服务。不要直接修改数据库或存储目录，也不要按文件名猜测并覆盖已有产物。
+用户要求归档时，只归档当前任务的最终成果。先完成下面的部署，再使用启动器输出的 `bin` 调用本地服务。不要直接修改数据库或存储目录，也不要按文件名猜测并覆盖已有知识。
 
 ## 部署
 
-安装本 Skill 时，以及每次归档之前，都要先确认服务。服务已经在运行时，直接使用，不要下载，也不要重新启动。服务没在运行时，才按下面的顺序启动；没有看到以 `AGENTSHELF_LAUNCHED` 开头的成功输出时，不要执行归档，也不要声称已经打开。
+安装本 Skill 时，以及每次归档之前，都要先比较版本。本 Skill 的版本是文首 `version` 的值。服务版本是 `/api/health` 返回的 `version`。启动器版本是二进制 `--version` 的输出。比较时去掉可选的前缀 `v`，按点分数字比较，不要按字符串比较。
 
-只选一个启动器，不要同时部署多份。按这个优先级：
+本 Skill 版本高于正在运行的服务，或高于本机启动器时，执行「版本升级」。不要沿用旧服务，也不要只换文件而不重启。服务版本已经等于或高于本 Skill 时，不要降级。这时服务已经在运行就直接使用，不要下载，也不要重新启动。服务没在运行，且启动器版本一致或还不存在时，才按下面的顺序启动。没有看到以 `AGENTSHELF_LAUNCHED` 开头的成功输出时，不要执行归档，也不要声称已经打开。版本一致并因此跳过启动时除外。
 
-1. 先检查服务是否已经启动。macOS 读取 `~/Library/Application Support/AgentShelf/runtime.json`，Linux 读取 `~/.local/share/AgentShelf/runtime.json`，Windows 读取 `%LOCALAPPDATA%\AgentShelf\runtime.json`。文件里有 `port` 时，请求 `http://127.0.0.1:<port>/api/health`。返回成功就直接使用这个服务，后面的下载和启动都跳过。
-2. 服务没在运行时，检查发布的二进制。macOS 和 Linux 为 `~/.agentshelf/bin/agentshelf-launcher`，Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`。文件存在且可以执行时，直接运行，不要加参数。
-3. 二进制不存在时，从最新的 GitHub Release 下载与本机系统对应的文件，保存为第 2 步的路径后再运行。不要克隆仓库来代替下载。
-4. 下载失败时，使用 `~/.agentshelf/app` 里的 `scripts/launch.py`。Windows 为 `%USERPROFILE%\.agentshelf\app\scripts\launch.py`。这个文件不存在就跳过。
-5. 最后才使用当前仓库。当前工作区包含 `scripts/launch.py`，且 `pyproject.toml` 里的项目名是 `agentshelf` 时，用这份源码启动。前面的办法都不可用时，报告下载地址和错误并停止，不要声称已经打开。
+只选一个启动器，不要同时部署多份。版本一致时按这个优先级：
 
-服务已经启动、但本机还没有可执行的归档命令时，按第 2 到第 5 步寻找或下载程序，并且只执行 `archive`，不要无参数启动。已有二进制无法执行时，删掉该文件后重新下载一次。重新下载仍然失败时，再按第 4 步和第 5 步继续。
+1. 先检查服务是否已经启动。macOS 读取 `~/Library/Application Support/AgentShelf/runtime.json`，Linux 读取 `~/.local/share/AgentShelf/runtime.json`，Windows 读取 `%LOCALAPPDATA%\AgentShelf\runtime.json`。文件里有 `port` 时，请求 `http://127.0.0.1:<port>/api/health`。返回成功且 `version` 不低于本 Skill 时，直接使用这个服务，后面的下载和启动都跳过。`version` 低于本 Skill 时不要使用，转到版本升级。
+2. 服务没在运行时，检查发布的二进制。macOS 和 Linux 为 `~/.agentshelf/bin/agentshelf-launcher`，Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`。文件存在且可以执行时，先运行 `"<路径>" --version`。输出不低于本 Skill 版本才直接运行，不要加别的参数。版本更低时不要运行，转到版本升级。
+3. 二进制不存在，且不需要版本升级时，从与本 Skill 版本对应的 GitHub Release 下载与本机系统对应的文件，保存为第 2 步的路径后再运行。标签是 `v` 加上本 Skill 版本，例如 `v0.3.1`。不要用 `latest` 代替这个标签，也不要克隆仓库来代替下载。
+4. 下载失败时，使用 `~/.agentshelf/app` 里的 `scripts/launch.py`。Windows 为 `%USERPROFILE%\.agentshelf\app\scripts\launch.py`。这个文件不存在就跳过。版本升级的下载失败不要走这一步。
+5. 最后才使用当前仓库。当前工作区包含 `scripts/launch.py`，且 `pyproject.toml` 里的项目名是 `agentshelf` 时，用这份源码启动。前面的办法都不可用时，报告下载地址和错误并停止，不要声称已经打开。版本升级失败时不要改用旧二进制或当前仓库。
+
+服务已经启动、版本不低于本 Skill、但本机还没有可执行的归档命令时，按第 2 到第 5 步寻找或下载程序，并且只执行 `archive`，不要无参数启动。已有二进制无法执行时，删掉该文件后按它的版本重新下载一次。重新下载仍然失败时，再按第 4 步和第 5 步继续。
+
+### 版本升级
+
+只在本 Skill 版本高于服务版本，或高于启动器 `--version` 时执行。服务没有 `version`，或启动器没有 `--version`，也视为需要升级。服务未运行但启动器更旧时，同样替换后再启动。
+
+1. 按「下载发布的启动器」把对应标签的文件下载到临时路径并校验。不要先覆盖正在运行的文件。
+2. 用这个临时文件执行 `stop`，停掉 `runtime.json` 里的服务。等到该 pid 已经退出，并且原来的 `/api/health` 不再成功，再继续。没有服务时，`stop` 失败可以忽略。
+3. 读取 `runtime.json` 里 `data_dir` 下的 `desktop.json`。其中的 pid 仍在运行时，结束该进程，避免旧界面占用端口。只结束这个 pid，不要结束其他程序。
+4. 确认旧进程退出后，把新文件移动到安装路径。macOS 和 Linux 执行 `chmod 755`，并在 macOS 上去掉 quarantine。Windows 上旧进程还在时不要覆盖 exe。
+5. 无参数运行新的启动器，不要用 Python 启动它。最后一行必须是 `AGENTSHELF_LAUNCHED`。再请求其中的后端 `/api/health`，`version` 必须等于本 Skill 版本。不相等，或没有这一行，就报告两边的版本并停止，不要归档，也不要声称已经重启。
 
 ### 源码启动器
 
@@ -36,7 +48,7 @@ Windows 上没有 `python3` 时改用 `py -3 scripts/launch.py`。
 
 ### 下载发布的启动器
 
-只在本机没有启动器时下载。用 `uname -sm` 判断 macOS 和 Linux 的架构。Windows 看 `PROCESSOR_ARCHITECTURE`：`AMD64` 用下表的 Windows 文件；`ARM64` 没有对应文件，说明不支持并停止。
+本机没有启动器，或版本升级需要替换时下载。用 `uname -sm` 判断 macOS 和 Linux 的架构。Windows 看 `PROCESSOR_ARCHITECTURE`：`AMD64` 用下表的 Windows 文件；`ARM64` 没有对应文件，说明不支持并停止。
 
 | 系统 | 架构 | Release 中的文件名 |
 |---|---|---|
@@ -46,36 +58,36 @@ Windows 上没有 `python3` 时改用 `py -3 scripts/launch.py`。
 | Linux | aarch64 | `agentshelf-launcher-linux-arm64` |
 | Windows | x64 | `agentshelf-launcher-windows-x64.exe` |
 
-文件地址是 `https://github.com/atorber/agentshelf/releases/latest/download/<文件名>`。校验文件是同一地址加上 `.sha256`，内容是一行 SHA-256 十六进制摘要。
+文件地址是 `https://github.com/atorber/agentshelf/releases/download/v<版本>/<文件名>`。`<版本>` 是本 Skill 的 `version`，标签不要再加别的字符。例如版本 `0.3.1` 对应 `https://github.com/atorber/agentshelf/releases/download/v0.3.1/<文件名>`。校验文件是同一地址加上 `.sha256`，内容是一行 SHA-256 十六进制摘要。不要改用 `latest`。
 
 macOS 和 Linux：
 
 1. 创建 `~/.agentshelf/bin`。
 2. 把二进制和对应的 `.sha256` 下载到临时文件。
 3. 计算二进制的 SHA-256，与校验文件中的摘要比较。不一致就删除临时文件并停止。macOS 用 `shasum -a 256`，Linux 用 `sha256sum`。
-4. 把二进制移动到 `~/.agentshelf/bin/agentshelf-launcher`，并执行 `chmod 755`。
+4. 不是版本升级时，把二进制移动到 `~/.agentshelf/bin/agentshelf-launcher`，并执行 `chmod 755`。版本升级时停在临时文件，按「版本升级」先停止旧进程，再移动并 `chmod 755`。
 5. 在 macOS 上再执行 `xattr -d com.apple.quarantine ~/.agentshelf/bin/agentshelf-launcher`。属性不存在时忽略这个命令的失败。
-6. 运行 `~/.agentshelf/bin/agentshelf-launcher`。不要加参数，也不要用 Python 启动它。
+6. 不是版本升级时，运行 `~/.agentshelf/bin/agentshelf-launcher`。不要加参数，也不要用 Python 启动它。版本升级的启动按「版本升级」执行。
 
 Windows：
 
 1. 创建 `%USERPROFILE%\.agentshelf\bin`。
 2. 用 `curl.exe -fL` 下载 exe 和对应的 `.sha256`。
 3. 用 `Get-FileHash -Algorithm SHA256` 比对摘要。不一致就删除并停止。
-4. 保存为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`。
-5. 运行这个 exe。不要加参数。
+4. 不是版本升级时，保存为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`。版本升级时停在临时文件，按「版本升级」先停止旧进程，再保存。旧进程还在时不要覆盖。
+5. 不是版本升级时，运行这个 exe。不要加参数。版本升级的启动按「版本升级」执行。
 
 发布的启动器是单个可执行文件，包含后端和本机界面。运行它不需要安装 Python 或 Node。
 
 ### 成功输出
 
-启动器会在后台启动后端和本机界面，然后退出；已经在运行时直接复用，并尝试打开界面。成功时最后一行类似：
+启动器会在后台启动后端和本机界面，然后退出；版本一致且已经在运行时直接复用，并尝试打开界面。版本升级必须先停掉旧服务，再看到新的成功输出。成功时最后一行类似：
 
 ```text
 AGENTSHELF_LAUNCHED {"backend":"http://127.0.0.1:8765","desktop":"http://127.0.0.1:1420","data_dir":"...","bin":"..."}
 ```
 
-界面没有自动打开时，打开输出里的 `desktop` 地址。记下其中的 `bin`。随后的归档命令都使用这个路径，不要改用系统里同名的其他命令。服务已经在运行并跳过启动时，归档命令使用本机已有的程序，不要求再出现这一行。启动器退出码不为 0，或服务未运行且输出里没有 `AGENTSHELF_LAUNCHED` 时，向用户报告错误并停止，不要声称已经归档。
+界面没有自动打开时，打开输出里的 `desktop` 地址。记下其中的 `bin`。随后的归档命令都使用这个路径，不要改用系统里同名的其他命令。服务版本不低于本 Skill 并因此跳过启动时，归档命令使用本机已有的程序，不要求再出现这一行。版本升级后必须出现这一行，并且 `/api/health` 的 `version` 等于本 Skill 版本。启动器退出码不为 0，或需要启动时输出里没有 `AGENTSHELF_LAUNCHED`，向用户报告错误并停止，不要声称已经归档或已经重启。
 
 ## 归档
 
@@ -87,7 +99,7 @@ AGENTSHELF_LAUNCHED {"backend":"http://127.0.0.1:8765","desktop":"http://127.0.0
 - 用户点了路径或文件名时，用用户点名的文件。
 - 最终稿还只在对话里、没有文件时，先按推断出的名称写成当前项目中的一个文件，再归档，并在结果里说明写到了哪里。
 - 有多份都像最终稿、无法判断是哪一份时，只列出候选并询问归档哪几份。过程稿、执行日志、思考记录和中间文件不列入候选。
-- 同一份最终成果包含多个文件时，放进同一份产物，用一条归档命令一次传入这些路径。不要拆成多份产物。
+- 同一份最终成果包含多个文件时，放进同一条知识，用一条归档命令一次传入这些路径。不要拆成多条知识。
 - 用户明确要留下多份彼此独立的成果时，才分别归档。
 
 ### 把图片、视频和附件写进正文
@@ -97,8 +109,8 @@ AGENTSHELF_LAUNCHED {"backend":"http://127.0.0.1:8765","desktop":"http://127.0.0
 - 图片和视频插在讲到它们的那一段、那张表或那个小节后面。写成 `![登录页](1panel-登录页截图.png)`、`![演示](演示.mp4)`。方括号里写这句话在说什么，圆括号里的文件名必须和实际文件一致。
 - 其他附件放成链接，写在相关小节里，例如 `[部署说明](1Panel部署说明.md)`。
 - 位置按内容决定。截图跟在提到该界面的地方；某一节专门讲这件事时，链接放在这一节里。不要全部堆在文末，也不要插进无关段落。
-- 正文没有写到、也无法判断该放在哪一节的附件，不要编造位置。它们仍和文档放进同一份产物。
-- 不要把这些图片、视频或附件再单独归档成另一份产物。
+- 正文没有写到、也无法判断该放在哪一节的附件，不要编造位置。它们仍和文档放进同一条知识。
+- 不要把这些图片、视频或附件再单独归档成另一条知识。
 
 ### 自动填写
 
@@ -112,7 +124,7 @@ AGENTSHELF_LAUNCHED {"backend":"http://127.0.0.1:8765","desktop":"http://127.0.0
 | 来源 | 当前 Agent 的名称，例如 Cursor、Claude Code、Codex |
 | 描述 | 一句话说明这份成果是什么 |
 
-追加为已有产物的新版本时，沿用该产物已有的名称、项目、标签和描述，除非用户明确要求修改。来源仍填写当前 Agent。
+追加为已有知识的新版本时，沿用这条知识已有的名称、项目、标签和描述，除非用户明确要求修改。来源仍填写当前 Agent。
 
 敏感文件（密钥、令牌、私钥等）必须得到用户明确同意后才能归档。
 
@@ -125,19 +137,19 @@ AGENTSHELF_LAUNCHED {"backend":"http://127.0.0.1:8765","desktop":"http://127.0.0
 "<bin>" archive "<文件1>" "<文件2>" --title "<名称>" --project "<项目>" --tags "<标签1,标签2>" --source "<当前 Agent>"
 ```
 
-1. 退出码为 0：报告产物名称、编号和版本，以及实际写入的项目、标签和来源。
-2. 退出码为 2：相同内容已经存在。把候选产物原样告诉用户，请用户选择：
-   - 创建新产物：同一条命令加上 `--new-artifact`
-   - 追加到已有产物：加上 `--artifact-id "<产物编号>"`，并沿用该产物已有的名称、项目、标签和描述
+1. 退出码为 0：报告这条知识的名称、编号和版本，以及实际写入的项目、标签和来源。
+2. 退出码为 2：相同内容已经存在。把候选原样告诉用户，请用户选择：
+   - 新建一条知识：同一条命令加上 `--new-artifact`
+   - 追加到已有知识：加上 `--artifact-id "<编号>"`，并沿用这条知识已有的名称、项目、标签和描述
 3. 退出码为其他值：报告命令输出的错误，不要声称已经归档。
 
-同一份成果的多个文件用一条命令归档。命令失败时不要改成逐个文件各建一份产物。彼此独立的成果才分开归档，并分别报告结果。同一次任务只部署一次。
+同一份成果的多个文件用一条命令归档。命令失败时不要改成逐个文件各建一条知识。彼此独立的成果才分开归档，并分别报告结果。同一次任务只部署一次。
 
 ## 禁止
 
-- 不在部署成功前登记产物。
-- 不根据文件名覆盖已有产物。
-- 不把图片、视频或其他附件只放进产物、却不写进文档里该出现的位置。
+- 不在部署成功前写入知识库。
+- 不根据文件名覆盖已有知识。
+- 不把图片、视频或其他附件只放进知识库、却不写进文档里该出现的位置。
 - 不为了补齐名称、项目、标签或来源打断用户。
 - 不把 CLI 或 API 绕开，直接写入数据目录。
-- 不采集 Agent 的思考过程、执行日志和中间产物。
+- 不采集 Agent 的思考过程、执行日志和中间稿。

@@ -10,7 +10,7 @@ from agentshelf import __version__
 from agentshelf.config import load_settings
 from agentshelf.server import running_session, serve, session_endpoint, stop_running
 
-app = typer.Typer(help="AgentShelf 本地产物库", no_args_is_help=True)
+app = typer.Typer(help="AgentShelf 本地知识库", no_args_is_help=True)
 runner_client_timeout = 120.0
 
 
@@ -25,7 +25,7 @@ def _print_version(value: bool) -> None:
 def main(
     _version: bool = typer.Option(False, "--version", "-V", help="显示版本", callback=_print_version, is_eager=True),
 ) -> None:
-    """AgentShelf 本地产物库。"""
+    """AgentShelf 本地知识库。"""
 
 
 def _client() -> httpx.Client:
@@ -59,8 +59,8 @@ def _print_human(body: dict, status_code: int) -> None:
         typer.echo(f"暂存编号: {body.get('staging_id')}")
         for item in body.get("candidates") or []:
             versions = ",".join(str(number) for number in item.get("versions") or [])
-            typer.echo(f"- {item.get('title')}  产物 {item.get('artifact_id')}  版本 {versions}")
-        typer.echo("请追加 --new-artifact 创建新产物，或使用 --artifact-id 追加版本。")
+            typer.echo(f"- {item.get('title')}  编号 {item.get('artifact_id')}  版本 {versions}")
+        typer.echo("请追加 --new-artifact 新建一条知识，或使用 --artifact-id 追加版本。")
         return
     if status_code >= 400:
         typer.echo(body.get("detail") or body.get("message") or "请求失败")
@@ -68,7 +68,7 @@ def _print_human(body: dict, status_code: int) -> None:
     if body.get("title") and body.get("id"):
         version = (body.get("current_version") or {}).get("version_number")
         typer.echo(body.get("message") or "完成")
-        typer.echo(f"产物: {body.get('title')}")
+        typer.echo(f"知识: {body.get('title')}")
         typer.echo(f"编号: {body.get('id')}")
         if version:
             typer.echo(f"当前版本: v{version}")
@@ -118,16 +118,16 @@ def status() -> None:
 @app.command()
 def archive(
     files: list[Path] = typer.Argument(..., exists=True, dir_okay=False, readable=True),
-    title: str = typer.Option("", help="产物名称"),
+    title: str = typer.Option("", help="知识的名称"),
     description: str = typer.Option("", help="描述"),
     project: str = typer.Option("", help="项目"),
     tags: str = typer.Option("", help="标签，逗号分隔"),
     source: str = typer.Option("", help="来源 Agent"),
-    artifact_id: str = typer.Option("", help="追加为该产物的新版本"),
-    new_artifact: bool = typer.Option(False, "--new-artifact", help="即使内容已存在，也创建新产物"),
+    artifact_id: str = typer.Option("", help="追加为这条知识的新版本"),
+    new_artifact: bool = typer.Option(False, "--new-artifact", help="即使内容已存在，也新建一条知识"),
     as_json: bool = typer.Option(False, "--json", help="输出 JSON"),
 ) -> None:
-    """通过本地服务归档一个最终产物。多个文件会放进同一份产物。"""
+    """把最终稿写入本地知识库。多个文件会放进同一条知识。"""
     decision = ""
     if new_artifact and artifact_id:
         typer.echo("不能同时指定 --new-artifact 和 --artifact-id")
@@ -201,7 +201,7 @@ def search(
     mode: str = typer.Option("keyword", help="keyword、semantic 或 hybrid"),
     as_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """检索已归档产物。"""
+    """在知识库里检索。"""
     with _client() as client:
         response = client.get(
             "/api/search",
@@ -213,7 +213,7 @@ def search(
     body = response.json()
     items = body.get("items") or []
     if not items:
-        typer.echo("没有匹配的产物")
+        typer.echo("没有匹配的知识")
         return
     for item in items:
         location = "当前版本" if item.get("is_current") else f"v{item.get('version_number')}"
@@ -233,11 +233,11 @@ def backup() -> None:
 @app.command()
 def restore(
     file: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
-    yes: bool = typer.Option(False, "--yes", help="确认用备份替换当前产物库"),
+    yes: bool = typer.Option(False, "--yes", help="确认用备份替换当前知识库"),
 ) -> None:
     """从备份包恢复。会替换当前数据库和文件。"""
     if not yes:
-        typer.echo("恢复会替换当前产物库。确认后请追加 --yes。")
+        typer.echo("恢复会替换当前知识库。确认后请追加 --yes。")
         raise typer.Exit(code=1)
     with file.open("rb") as handle:
         with _client() as client:

@@ -91,7 +91,7 @@ export function SettingsPage() {
                 </div>
                 <p className="prompt">{ARCHIVE_PROMPT}</p>
               </div>
-              <p className="muted small">名称、项目、标签和来源由 Agent 自动填写。内容与已有产物相同时，Agent 会先问你是新建产物还是追加版本，不会按文件名覆盖。</p>
+              <p className="muted small">名称、项目、标签和来源由 Agent 自动填写。内容与已有知识相同时，Agent 会先问你是新建一条还是追加版本，不会按文件名覆盖。</p>
             </div>
           </div>
 
@@ -145,7 +145,7 @@ export function SettingsPage() {
               <dl className="kv">
                 <dt>内容</dt>
                 <dd>
-                  {storage?.artifact_count || 0} 个产物 · {storage?.version_count || 0} 个版本 · {storage?.blob_count || 0} 个文件
+                  {storage?.artifact_count || 0} 条知识 · {storage?.version_count || 0} 个版本 · {storage?.blob_count || 0} 个文件
                 </dd>
                 <dt>占用</dt>
                 <dd>
@@ -169,7 +169,7 @@ export function SettingsPage() {
                       const file = event.target.files?.[0]
                       event.target.value = ""
                       if (!file) return
-                      if (!window.confirm("用这个备份替换当前产物库？")) return
+                      if (!window.confirm("用这个备份替换当前知识库？")) return
                       run(() => restoreUploadedBackup(file), "已从文件恢复")
                     }}
                   />
@@ -180,7 +180,7 @@ export function SettingsPage() {
               </div>
             </div>
             <div>
-              {backups.length === 0 ? <div className="empty small">还没有备份。恢复会替换当前产物库，失败时自动回滚。</div> : null}
+              {backups.length === 0 ? <div className="empty small">还没有备份。恢复会替换当前知识库，失败时自动回滚。</div> : null}
               {backups.map((item) => (
                 <div className="list-row" key={item.name}>
                   <div className="grow">
@@ -198,7 +198,7 @@ export function SettingsPage() {
                     className="btn-text danger"
                     disabled={busy}
                     onClick={() => {
-                      if (window.confirm("用该备份替换当前产物库？")) run(() => restoreBackup(item.name), "已恢复")
+                      if (window.confirm("用该备份替换当前知识库？")) run(() => restoreBackup(item.name), "已恢复")
                     }}
                   >
                     恢复
@@ -252,7 +252,7 @@ export function SettingsPage() {
               <ul className="tips">
                 <li>页面一直停在启动：让 Agent 重新打开 AgentShelf，它会先检查服务是否已在运行。</li>
                 <li>端口被占用时，服务会自动改用 8765 到 8865 之间的空闲端口。</li>
-                <li>预览失败时，产物记录和下载仍然保留，损坏的文件不会影响其他产物。</li>
+                <li>预览失败时，这条知识和下载仍然保留，损坏的文件不会影响其他知识。</li>
                 <li>日志写在数据目录的 logs 里，不会发往外部服务器。</li>
               </ul>
             </div>
