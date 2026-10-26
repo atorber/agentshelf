@@ -1,12 +1,12 @@
 ---
 name: agentshelf-archive
-version: 0.3.2
+version: 0.4.0
 description: 把当前任务的最终稿归档到本地知识库。用户说「把这份最终稿归档到 AgentShelf」或要求保存最终稿、收入知识库时使用。自行确定文件，并填写名称、项目、标签、来源和描述，不要向用户索要这些字段。用户要求 HTML 或网页时正文必须是 .html。普通文档用 Markdown；只有版式或交互需要时才写成 HTML。调用前比较本 Skill 版本和正在运行的服务版本。本 Skill 更高时，下载对应版本的启动器二进制，停掉旧服务后再启动。版本一致且服务已启动就直接使用。否则检查发布的启动器二进制；没有就从该版本的 GitHub Release 下载。下载失败再用 ~/.agentshelf/app 里的 scripts/launch.py，最后才用当前仓库。不要克隆仓库。不要归档思考过程、日志或中间文件。
 ---
 
 # AgentShelf 归档
 
-版本 0.3.2。
+版本 0.4.0。
 
 用户要求归档时，只归档当前任务的最终成果。先完成下面的部署，再使用启动器输出的 `bin` 调用本地服务。不要直接修改数据库或存储目录，也不要按文件名猜测并覆盖已有知识。
 
@@ -20,7 +20,7 @@ description: 把当前任务的最终稿归档到本地知识库。用户说「�
 
 1. 先检查服务是否已经启动。macOS 读取 `~/Library/Application Support/AgentShelf/runtime.json`，Linux 读取 `~/.local/share/AgentShelf/runtime.json`，Windows 读取 `%LOCALAPPDATA%\AgentShelf\runtime.json`。文件里有 `port` 时，请求 `http://127.0.0.1:<port>/api/health`。返回成功且 `version` 不低于本 Skill 时，直接使用这个服务，后面的下载和启动都跳过。`version` 低于本 Skill 时不要使用，转到版本升级。
 2. 服务没在运行时，检查发布的二进制。macOS 和 Linux 为 `~/.agentshelf/bin/agentshelf-launcher`，Windows 为 `%USERPROFILE%\.agentshelf\bin\agentshelf-launcher.exe`。文件存在且可以执行时，先运行 `"<路径>" --version`。输出不低于本 Skill 版本才直接运行，不要加别的参数。版本更低时不要运行，转到版本升级。
-3. 二进制不存在，且不需要版本升级时，从与本 Skill 版本对应的 GitHub Release 下载与本机系统对应的文件，保存为第 2 步的路径后再运行。标签是 `v` 加上本 Skill 版本，例如 `v0.3.2`。不要用 `latest` 代替这个标签，也不要克隆仓库来代替下载。
+3. 二进制不存在，且不需要版本升级时，从与本 Skill 版本对应的 GitHub Release 下载与本机系统对应的文件，保存为第 2 步的路径后再运行。标签是 `v` 加上本 Skill 版本，例如 `v0.4.0`。不要用 `latest` 代替这个标签，也不要克隆仓库来代替下载。
 4. 下载失败时，使用 `~/.agentshelf/app` 里的 `scripts/launch.py`。Windows 为 `%USERPROFILE%\.agentshelf\app\scripts\launch.py`。这个文件不存在就跳过。版本升级的下载失败不要走这一步。
 5. 最后才使用当前仓库。当前工作区包含 `scripts/launch.py`，且 `pyproject.toml` 里的项目名是 `agentshelf` 时，用这份源码启动。前面的办法都不可用时，报告下载地址和错误并停止，不要声称已经打开。版本升级失败时不要改用旧二进制或当前仓库。
 
@@ -58,7 +58,7 @@ Windows 上没有 `python3` 时改用 `py -3 scripts/launch.py`。
 | Linux | aarch64 | `agentshelf-launcher-linux-arm64` |
 | Windows | x64 | `agentshelf-launcher-windows-x64.exe` |
 
-文件地址是 `https://github.com/atorber/agentshelf/releases/download/v<版本>/<文件名>`。`<版本>` 是本 Skill 的 `version`，标签不要再加别的字符。例如版本 `0.3.2` 对应 `https://github.com/atorber/agentshelf/releases/download/v0.3.2/<文件名>`。校验文件是同一地址加上 `.sha256`，内容是一行 SHA-256 十六进制摘要。不要改用 `latest`。
+文件地址是 `https://github.com/atorber/agentshelf/releases/download/v<版本>/<文件名>`。`<版本>` 是本 Skill 的 `version`，标签不要再加别的字符。例如版本 `0.4.0` 对应 `https://github.com/atorber/agentshelf/releases/download/v0.4.0/<文件名>`。校验文件是同一地址加上 `.sha256`，内容是一行 SHA-256 十六进制摘要。不要改用 `latest`。
 
 macOS 和 Linux：
 
