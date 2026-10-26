@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react"
 import { backupToCloud, clearSemantic, createBackup, dataDir, downloadBackup, enableSemantic, getCloud, importModel, listBackups, listCloudBackups, openDataDir, pullSync, pushSync, rebuildSemantic, restoreBackup, restoreCloudBackup, restoreUploadedBackup, saveCloud, saveSync, status, testCloud } from "../api"
 import { formatBytes, formatTime } from "../format"
-import type { BackupItem, CloudInput, Status } from "../types"
+import type { BackupItem, CloudInput, CloudSettings, Status } from "../types"
+
+type CloudForm = CloudSettings & { secret_access_key: string }
 
 function cloudPayload(cloud: CloudInput): CloudInput {
   return {
@@ -15,7 +17,7 @@ function cloudPayload(cloud: CloudInput): CloudInput {
   }
 }
 
-const EMPTY_CLOUD: CloudInput & { secret_set: boolean; configured: boolean } = {
+const EMPTY_CLOUD: CloudForm = {
   endpoint: "",
   region: "us-east-1",
   bucket: "",
