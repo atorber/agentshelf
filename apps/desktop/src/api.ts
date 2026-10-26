@@ -1,4 +1,4 @@
-import type { Agent, Artifact, BackupItem, CloudInput, CloudSettings, IngestResult, LibraryItem, Preview, Project, Status, SyncResult, Tag } from "./types"
+import type { Agent, Artifact, BackupItem, CloudInput, CloudSettings, IngestResult, InspectorAnswer, InspectorReport, InspectorSkill, LibraryItem, Preview, Project, Status, SyncResult, Tag } from "./types"
 
 interface Session {
   base: string
@@ -200,6 +200,30 @@ export function pushSync() {
 
 export function pullSync() {
   return request<{ ok: boolean }>("/api/cloud/sync/pull", { method: "POST" })
+}
+
+export function listInspectorSkills() {
+  return request<{ items: InspectorSkill[] }>("/api/inspector/skills")
+}
+
+export function analyzeInspectorSkill(path: string, mode: "quick" | "deep", force = false) {
+  return request<InspectorReport>("/api/inspector/analyses", { method: "POST", body: JSON.stringify({ path, mode, force }) })
+}
+
+export function getInspectorReport(id: string) {
+  return request<InspectorReport>(`/api/inspector/reports/${encodeURIComponent(id)}`)
+}
+
+export function getInspectorFile(reportId: string, fileId: string) {
+  return request<{ id: string; path: string; text: string }>(`/api/inspector/reports/${encodeURIComponent(reportId)}/files/${encodeURIComponent(fileId)}`)
+}
+
+export function askInspector(reportId: string, question: string) {
+  return request<InspectorAnswer>(`/api/inspector/reports/${encodeURIComponent(reportId)}/questions`, { method: "POST", body: JSON.stringify({ question }) })
+}
+
+export function deleteInspectorSkill(id: string) {
+  return request<{ ok: boolean }>(`/api/inspector/skills/${encodeURIComponent(id)}`, { method: "DELETE" })
 }
 
 export function confirmIngest(payload: {

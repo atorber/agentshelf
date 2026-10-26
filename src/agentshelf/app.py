@@ -27,6 +27,7 @@ from agentshelf.cloud import (
 )
 from agentshelf.config import Settings, app_version, load_settings
 from agentshelf.errors import LibraryError
+from agentshelf.inspector import register_inspector
 from agentshelf.library import Library
 from agentshelf.security import check_token
 from agentshelf.storage import ensure_space, safe_filename
@@ -89,6 +90,8 @@ def create_app(settings: Settings | None = None, *, testing: bool = False, embed
             provided = x_agentshelf_token.strip()
         if not check_token(provided, library.token):
             raise HTTPException(status_code=401, detail="无效的本地访问令牌")
+
+    register_inspector(app, resolved, require_token)
 
     @app.get("/api/health")
     def health():

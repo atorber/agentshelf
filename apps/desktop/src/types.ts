@@ -155,6 +155,68 @@ export interface CloudInput {
   path_style: boolean
 }
 
+export interface InspectorSkill {
+  id: string | null
+  name: string
+  description: string
+  path: string
+  source_label: string
+  readable: boolean
+  status: "discovered" | "analyzed" | "changed" | "missing"
+  report_id: string | null
+  analyzed_at: string | null
+  mode: string | null
+}
+
+export interface InspectorRef {
+  path: string
+  fileId?: string
+  start_line: number | null
+  end_line: number | null
+  precision: string
+}
+
+export interface InspectorNode {
+  id: string
+  nodeType: string
+  title: string
+  description: string
+  evidenceType: string
+  sourceRefs: InspectorRef[]
+}
+
+export interface InspectorReport {
+  id: string
+  skillId: string
+  skillVersionId: string
+  sourcePath?: string
+  createdAt: string
+  reused: boolean
+  schemaVersion: string
+  overview: {
+    name: string
+    purpose: string
+    triggerConditions: string[]
+    limitations: string[]
+    mode: string
+    fileCount: number
+  }
+  nodes: InspectorNode[]
+  edges: { id: string; from: string; to: string; label: string }[]
+  tools: { id: string; name: string; kind: string; evidenceType: string; purpose: string; sourceRefs: InspectorRef[] }[]
+  files: { id: string; path: string; fileType: string; sizeBytes: number; sha256: string }[]
+  sections: { id: string; title: string; paragraphs: string[] }[]
+  findings: { severity: string; message: string; evidenceType: string }[]
+  openQuestions: string[]
+}
+
+export interface InspectorAnswer {
+  answer: string
+  evidence: InspectorRef[]
+  claims: { text: string; evidenceType: string }[]
+  unknowns: string[]
+}
+
 export interface Status {
   version: string
   host: string

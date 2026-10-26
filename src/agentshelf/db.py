@@ -126,6 +126,74 @@ CREATE INDEX IF NOT EXISTS idx_version_files_sha ON version_files(sha256);
 CREATE INDEX IF NOT EXISTS idx_artifacts_project ON artifacts(project_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_updated ON artifacts(updated_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+
+CREATE TABLE IF NOT EXISTS inspector_skills (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  source_type TEXT NOT NULL,
+  source_uri TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS inspector_versions (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL REFERENCES inspector_skills(id) ON DELETE CASCADE,
+  content_hash TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  manifest_json TEXT NOT NULL,
+  parser_version TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS inspector_files (
+  id TEXT PRIMARY KEY,
+  version_id TEXT NOT NULL REFERENCES inspector_versions(id) ON DELETE CASCADE,
+  relative_path TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  content_text TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS inspector_jobs (
+  id TEXT PRIMARY KEY,
+  version_id TEXT NOT NULL REFERENCES inspector_versions(id) ON DELETE CASCADE,
+  mode TEXT NOT NULL,
+  status TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  error_code TEXT,
+  error_message TEXT,
+  created_at TEXT NOT NULL,
+  finished_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS inspector_reports (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL UNIQUE REFERENCES inspector_jobs(id) ON DELETE CASCADE,
+  version_id TEXT NOT NULL REFERENCES inspector_versions(id) ON DELETE CASCADE,
+  schema_version TEXT NOT NULL,
+  overview_json TEXT NOT NULL,
+  report_json TEXT NOT NULL,
+  model_info_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS inspector_messages (
+  id TEXT PRIMARY KEY,
+  report_id TEXT NOT NULL REFERENCES inspector_reports(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  body TEXT NOT NULL,
+  evidence_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_inspector_versions_skill ON inspector_versions(skill_id);
+CREATE INDEX IF NOT EXISTS idx_inspector_files_version ON inspector_files(version_id);
+CREATE INDEX IF NOT EXISTS idx_inspector_reports_version ON inspector_reports(version_id);
+CREATE INDEX IF NOT EXISTS idx_inspector_versions_hash ON inspector_versions(skill_id, content_hash, mode);
 """
 
 

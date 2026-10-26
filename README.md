@@ -125,6 +125,13 @@ agentshelf stop
 | POST | `/api/semantic/enable` | 开启或关闭语义检索 |
 | POST | `/api/semantic/rebuild` | 重建语义索引 |
 | DELETE | `/api/semantic` | 删除语义索引 |
+| GET | `/api/inspector/skills` | 发现本机 Skill 目录并显示已有报告 |
+| POST | `/api/inspector/analyses` | 静态分析 `SKILL.md` 或整个 Skill 目录 |
+| GET | `/api/inspector/reports/{id}` | 读取学习报告、流程和工具证据 |
+| GET | `/api/inspector/reports/{id}/files/{fileId}` | 读取报告快照中的文件文本 |
+| POST | `/api/inspector/reports/{id}/questions` | 基于当前报告提问 |
+| GET | `/api/inspector/reports/{id}/export` | 导出 Markdown 报告 |
+| DELETE | `/api/inspector/skills/{id}` | 删除导入记录和报告，不删除原始 Skill |
 
 语义检索需要自行安装可选依赖 `pip install -e ".[semantic]"`，并导入含 `config.json` 与权重文件的本地模型目录。应用不会下载模型。
 
@@ -138,6 +145,16 @@ agentshelf stop
 
 云同步使用同一套访问地址和密钥，另设 Bucket 和根目录，按本机数据目录逐文件镜像，包括 `library.db`。令牌、`cloud.json`、运行状态、日志和暂存不会上传。同步和拉取都是手动操作。
 
+## 学习 Skill
+
+学习页用静态分析阅读本机 Skill，帮助理解它的结构、步骤和工具。分析只读取文件，不执行脚本，也不修改原始 Skill。
+
+会查找这些目录中的 `SKILL.md`：`~/.cursor/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.codex/skills`。其他位置可以在页面里填入 `SKILL.md` 或它所在的目录。快速分析只读 `SKILL.md`。深度分析读取该目录内的文本文件，不跟随指向目录外的符号链接。单次最多纳入 80 个文件，单个文本超过 512KB 时不读取正文。
+
+流程图、工具清单和学习报告来自同一次分析。结论会标成原文、已声明、文本引用或推断。能定位时给出文件和行号，定位不到时只保留文件级引用。静态分析不知道 Agent 运行时实际选择了哪条分支。疑似密钥在报告正文里脱敏。要求忽略既有规则的文本只当作不可信内容。
+
+问答只使用当前报告。文件没有变化时再次分析会打开已有报告；内容变化后生成新快照，旧报告仍可打开。
+
 ## 测试
 
 ```bash
@@ -145,11 +162,12 @@ source .venv/bin/activate
 pytest
 ```
 
-覆盖归档去重、版本恢复、全文检索、预览、损坏文件、备份恢复、令牌、断网条件下不依赖外部地址，以及 CLI 通过本地 API 归档。
+覆盖归档去重、版本恢复、全文检索、预览、损坏文件、备份恢复、云端备份与云同步、Skill 静态分析、令牌、断网条件下不依赖外部地址，以及 CLI 通过本地 API 归档。
 
 ## 已知限制与排查
 
 - 首版是单人本地库，没有账号、远程访问和团队权限。云端备份上传 zip；云同步按目录镜像存储。两者都要手动执行，不会在后台自动进行。
+- Skill 学习是静态分析，不会执行 Skill，也不能还原 Agent 运行时实际走过的分支。
 - 安装包需要在 macOS 和 Windows 上分别构建。仓库里提供了 Tauri 的 dmg / nsis 配置。
 - 桌面壳优先使用仓库里的 `.venv`。换机器后先执行 `./scripts/dev.sh` 或 `pip install -e .`。
 - 语义检索在没有本地模型和可选依赖时不可用，全文检索不受影响。

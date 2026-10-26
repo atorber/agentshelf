@@ -439,6 +439,16 @@ th { background: #fafafb; font-weight: 600; }
 .list-row:first-child { border-top: 0; }
 .prompt { font-size: 13px; background: var(--subtle); border-radius: var(--radius-sm); padding: 10px 12px; white-space: pre-wrap; word-break: break-word; margin: 0; }
 .tips { margin: 0; padding-left: 18px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.inspector-layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: start; }
+.inspector-skill { padding: 10px 0; border-top: 1px solid var(--line); }
+.inspector-skill h3 { margin: 0 0 6px; font-size: 14px; }
+.inspector-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.inspector-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.inspector-flow { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.inspector-node { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius-sm); padding: 8px 10px; cursor: pointer; }
+.inspector-node.active { border-color: var(--focus-line); background: #f5f8ff; }
+.inspector-detail, .inspector-code { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; background: var(--subtle); min-height: 180px; }
+.inspector-code { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: var(--mono); font-size: 12px; }
 
 @media (max-width: 1180px) {
   .doc-info { display: none; }
@@ -454,7 +464,7 @@ th { background: #fafafb; font-weight: 600; }
   .side-status { margin: 0 0 0 auto; border-top: 0; }
   .main { height: auto; padding: 14px 14px 40px; }
   .tree-panel { display: none; }
-  .columns, .form-grid { grid-template-columns: 1fr; }
+  .columns, .form-grid, .inspector-layout, .inspector-split { grid-template-columns: 1fr; }
   .trow { grid-template-columns: 34px minmax(0, 1fr) 84px 64px; }
   .trow > :nth-child(3), .trow > :nth-child(4), .trow > :nth-child(6) { display: none; }
   .drawer { width: 100vw; min-width: 0; }

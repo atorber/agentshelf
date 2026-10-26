@@ -29,7 +29,8 @@ const pages = [
   {href: "/usage/library", title: "知识库", text: "一行一条。搜索、筛选，点进去看详情。"},
   {href: "/usage/upload", title: "上传", text: "不经过 Agent，自己把文件放进库。"},
   {href: "/usage/organize", title: "整理", text: "维护项目、标签和来源。删除它们不会删除已收入的知识。"},
-  {href: "/usage/settings", title: "设置", text: "复制提示词、查看数据目录、备份，按需启用语义检索。"},
+  {href: "/usage/learn", title: "学习", text: "静态阅读 Skill 的结构、流程和工具。不执行脚本。"},
+  {href: "/usage/settings", title: "设置", text: "复制提示词、查看数据目录、本机备份和 S3，按需启用语义检索。"},
 ]
 
 export default function Homepage() {

@@ -8,7 +8,7 @@ const sidebars: SidebarsConfig = {
       type: "category",
       label: "使用",
       link: {type: "doc", id: "usage/index"},
-      items: ["usage/library", "usage/upload", "usage/detail", "usage/organize", "usage/settings"],
+      items: ["usage/library", "usage/upload", "usage/detail", "usage/organize", "usage/learn", "usage/settings"],
     },
     "agent",
     "troubleshooting",

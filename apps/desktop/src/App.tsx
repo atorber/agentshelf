@@ -4,6 +4,7 @@ import { health, initApi } from "./api"
 import { Layout } from "./components/Layout"
 import { DetailPage } from "./pages/DetailPage"
 import { LibraryPage } from "./pages/LibraryPage"
+import { LearnPage } from "./pages/LearnPage"
 import { OrganizePage } from "./pages/OrganizePage"
 import { SettingsPage } from "./pages/SettingsPage"
 import { UploadPage } from "./pages/UploadPage"
@@ -56,6 +57,7 @@ export function App() {
           <Route index element={<LibraryPage />} />
           <Route path="upload" element={<UploadPage />} />
           <Route path="organize" element={<OrganizePage />} />
+          <Route path="learn" element={<LearnPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="artifacts/:id" element={<DetailPage />} />
         </Route>

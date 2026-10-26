@@ -9,6 +9,7 @@ const links = [
   ["/", "知识库", "book"],
   ["/upload", "上传", "upload"],
   ["/organize", "整理", "organize"],
+  ["/learn", "学习", "search"],
   ["/settings", "设置", "settings"],
 ]
 
